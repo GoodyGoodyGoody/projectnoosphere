@@ -5,16 +5,24 @@
 //   npm run librarian -- pause "reason"
 //   npm run librarian -- resume
 //   npm run librarian -- run --dry-run      # full cycle, stub reviewers that hold everything, $0
-//   npm run librarian -- run                # real models (wired in 2c part 3)
+//   npm run librarian -- run                # real models: Claude Opus 5.5 + GPT-6 Sol
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { NoosphereClient } from "../src/librarian/client.ts";
 import { scriptedReviewer } from "../src/librarian/fake.ts";
+import { anthropicReviewer, openaiReviewer } from "../src/librarian/providers.ts";
 import { RUBRIC_VERSION } from "../src/librarian/prompt.ts";
 import { runCycle } from "../src/librarian/run.ts";
 import { SpendLedger } from "../src/librarian/spend.ts";
 import { DATA_DIR } from "../src/paths.ts";
+
+// Provider keys live in this repo's .env (gitignored, mode 600).
+try {
+  process.loadEnvFile(join(import.meta.dirname, "..", ".env"));
+} catch {
+  /* no .env: only status/pause/resume/dry-run work */
+}
 
 const PAUSE_FILE = join(DATA_DIR, "librarian.paused");
 const LEDGER = new SpendLedger(join(DATA_DIR, "librarian-spend.jsonl"));
@@ -48,7 +56,19 @@ if (cmd === "status") {
   if (!token) throw new Error("NOOSPHERE_LIBRARIAN_TOKEN is not set");
   const base = process.env.NOOSPHERE_API_BASE ?? `http://127.0.0.1:${process.env.PORT ?? 4400}`;
   if (!rest.includes("--dry-run")) {
-    throw new Error("real reviewers are wired in 2c part 3; use --dry-run for now");
+    // The chosen pair (2026-09-30 live canary test: all 6 canaries correct,
+    // measured ~$0.009 per item with the charter prompt cached).
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!process.env.ANTHROPIC_API_KEY || !openaiKey) throw new Error("ANTHROPIC_API_KEY and OPENAI_API_KEY must be set (.env)");
+    const report = await runCycle({
+      client: new NoosphereClient(base, token),
+      primary: anthropicReviewer({ model: "claude-opus-5-5", effort: "medium", maxTokens: 4000 }),
+      second: openaiReviewer({ model: "gpt-6-sol", reasoningEffort: "medium", maxTokens: 4000, apiKey: openaiKey }),
+      rubricVersion: RUBRIC_VERSION,
+      ledger: LEDGER, monthlyCapUsd: MONTHLY_CAP, runCapUsd: RUN_CAP, pauseFile: PAUSE_FILE, notify,
+    });
+    console.log(JSON.stringify(report, null, 2));
+    process.exit(report.canaryFailure || report.applyErrors.length ? 1 : 0);
   }
   const hold = () => "hold" as const;
   // A dry run reads the real queue but applies nothing: every moderation call

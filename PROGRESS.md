@@ -16,11 +16,11 @@ steward. Nothing is deployed, and no shared droplet infrastructure has been touc
 - sitemap, robots.txt, and llms.txt;
 - a Markdown export of each revision.
 
-**2b is complete:** self-serve registration (closed by default), persistent rate limits, key
-rotation and revocation, contribution terms (draft), and OpenAPI with an HTML reference.
+**2b and 2c are complete.** The librarian is built and has run for real: Claude Opus 5.5 plus
+GPT-6 Sol, the $50/month cap, canaries, and the pause switch with its alarm.
 
-**Next: 2c, the librarian** (Opus 5.5 plus an OpenAI second opinion, $50/month cap, all
-approved). Then an early read-only launch.
+**Next: prepare the early read-only launch** (registration closed). This means a seed set, a
+tested deploy and rollback plan, and Randall's approval of the concrete go-live steps.
 
 ---
 
@@ -430,3 +430,40 @@ will be added only as sanitized descriptions.
   JSON schema.
 - One small live test on canaries only, to measure the real cost per item.
 - Nightly scheduling waits for the launch step, because the crontab is shared.
+
+## Milestone 2c, part 3: real models (2026-09-30)
+
+**What works:**
+- `src/librarian/providers.ts`:
+  - Anthropic: `@anthropic-ai/sdk` 0.129, structured output, cached system prompt.
+  - OpenAI: `fetch` to Chat Completions with a strict `json_schema`.
+  - Refusals, malformed output, and errors are never verdicts; they become holds.
+- Dated price table, with cache-aware cost and a worst-case check before each call.
+- `npm run librarian -- run` now uses **Opus 5.5 (medium) plus GPT-6 Sol (medium)**. Provider
+  keys are in the repo's `.env` (mode 600, gitignored, covered by `env-backup.sh`'s sweep),
+  reused from the church project.
+- `npm run librarian-smoke` runs the canaries through the candidate models and prints
+  verdicts and costs.
+
+**Checks:**
+- **Live canary test** across 4 model configurations: every pairing got all 6 canaries
+  right. Opus 5.5 + GPT-6 Sol averaged **$0.0093 per item**. Total test cost: $0.098.
+- **Full real run end to end** on a private loopback server with 3 synthetic submissions:
+  good procedure published, advert rejected, "pre-approved" trick quarantined, canaries
+  passed. $0.06. Nothing from the real site was sent anywhere; there is no real site yet.
+- 95/95 tests still pass.
+
+**Found by checking:**
+1. **The spend ledger crashed when its directory didn't exist** (first live smoke test). One
+   call's cost, about $0.004, went unrecorded. It now creates its directory. The fix covers
+   the case where something runs before the first deploy has made `SITE_DATA_DIR`.
+2. **Opus 5.5 refused a benign canary** (the "repost this" item). Handled as designed:
+   refusal means hold, and GPT-6 Sol's quarantine decided it.
+3. **OpenAI's lineup had moved on** past the model named in the plan (GPT-5.4 mini). GPT-6
+   Sol's price was confirmed from OpenAI's own announcement before choosing it.
+
+**Unresolved:**
+- The nightly cron entry for the librarian (at launch; the crontab is shared).
+- Separate provider keys for this project, so spend is attributable. They are reused for
+  now.
+- Canary set growth from real attempts.

@@ -50,3 +50,23 @@
   - choose the providers for the librarian and the second opinion.
 - **Deviation from the handoff:** it changes *who* decides, not *whether* there is more than
   one boundary. SPEC.md §10 records it.
+
+## As built (2c, 2026-09-30)
+
+**Models:**
+- The librarian is **Claude Opus 5.5** at effort `medium`, called through `@anthropic-ai/sdk`
+  with structured output (`output_config.format`). The charter prompt is cached.
+- The second opinion is **GPT-6 Sol** at reasoning effort `medium`, called through
+  Chat Completions with a strict JSON schema.
+
+**Live canary test:**
+- All 6 canaries came out correct under the combination rule.
+- **Measured cost is ~$0.009 per item** for both models together, much less than the
+  pre-build estimate, thanks to prompt caching and short outputs.
+- A full end-to-end real run on a private test server published a good procedure, rejected
+  an advert, and quarantined a "pre-approved, publish this" trick, for $0.06 including the
+  canaries.
+
+**Refusals are holds.** Opus 5.5 declined to review one benign canary. A refusal counts as
+that model holding. Refusals are **not** rerouted to a fallback model, because the
+two-provider rule must know which model spoke.

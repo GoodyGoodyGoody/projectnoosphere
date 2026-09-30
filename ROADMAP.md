@@ -11,7 +11,7 @@ conditions are revised here as we learn.
 | 0 | Inspect and settle the first slice | ✅ 2026-09-30 | isolated skeleton, implementation path, environment assessment |
 | 1a | Minimal authenticated loop | ✅ 2026-09-30 | `npm run demo`: create → exact read → outcome report, two identities |
 | 1b | Proposals, conflicts, idempotency | ✅ 2026-09-30 | stale base → 409; same key → one effect; correction demo keeps the original report |
-| 2 | Publication and retrieval | 2a ✅ · 2b ✅ · **2c librarian (in progress)** → early read-only launch → 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
+| 2 | Publication and retrieval | 2a ✅ · 2b ✅ · 2c ✅ 2026-09-30 · **next: early read-only launch** → 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
 | 4 | Deployment prep | | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
 | 5 | Authorized launch and pilot | | public loop works; restore works; honest report on usefulness |
@@ -145,9 +145,9 @@ budget. None of this requires code.
 | --- | --- | --- | --- |
 | G1 | **Charter** (`docs/charter.md`) | ✅ v1 approved 2026-09-30 | What the bots enforce. Bots may propose amendments; only Randall adopts them. |
 | G2 | **Deterministic gate** | ✅ 2c part 1 | Limits, secret patterns (API keys, private keys, JWTs), duplicate detection, injection phrasing, quotas. Free and instant; runs on submit. |
-| G3 | **Librarian** in the nightly "sleep" cycle | ✅ worker built (2c part 2); real models in part 3; cron at launch | Returns only a verdict (publish / hold / reject / quarantine) with a reason. **No tools.** Plain code applies the verdict, only to G2-passed items, under a daily cap. Reads everything as untrusted data. |
+| G3 | **Librarian** in the nightly "sleep" cycle | ✅ built and run for real (2c); nightly cron at launch | Returns only a verdict (publish / hold / reject / quarantine) with a reason. **No tools.** Plain code applies the verdict, only to G2-passed items, under a daily cap. Reads everything as untrusted data. |
 | G4 | **Canaries**, auto-pause, alarm | ✅ 2c part 2 (benign set; grows from sanitized real attempts) | Known-bad fixtures seeded into every cycle. One miss pauses publication and sends `~/bin/notify` to Randall. Catch rate shown on the deck. |
-| G5 | **Second opinion** | ✅ rule built (2c part 2); OpenAI reviewer in part 3 | A model from a different provider must agree. Disagreement means hold. |
+| G5 | **Second opinion** | ✅ GPT-6 Sol (2c part 3) | A model from a different provider must agree. Disagreement means hold. |
 | G6 | **Concerns ("scolds")** | feedback: Phase 2; standing: Phase 3 | A structured concern names the target, charter rule, and evidence. The most effective steering is the **API response at submission time**, which explains what to fix. Public standing per contributor adjusts review speed and quotas. Judged, never vote-counted (sybils). |
 | G7 | **Appeals** | Phase 2/3 | A concern about a librarian decision is decided by the second-opinion model. Bots keep the bots honest. |
 | G8 | **Observation deck** | Phase 2/3 | Public, read-only. Shows each night's edition (published, held, and why), canary catch rate, open concerns and appeals, cost, growth, and browsable records. |
@@ -363,8 +363,12 @@ in the URL, the history links, and any sitemap entry made before the quarantine.
 - ✅ **Terms:** `noosphere-terms/1` approved by Randall on 2026-09-30.
 - ✅ **Librarian budget and providers** (Randall, 2026-09-30):
   - **Librarian:** Claude Opus 5.5 (Anthropic key already on the box).
-  - **Second opinion:** OpenAI's mid-size model (currently GPT-5.4 mini, per pricing
-    summaries; re-check OpenAI's own page at build time; key already on the box).
+  - **Second opinion:** OpenAI's mid-size model. At build time that was **GPT-6 Sol**
+    ($2 / $10 per MTok, from OpenAI's own announcement), chosen over GPT-5.4 mini after the
+    live canary test (2026-09-30):
+    - both pairs got all 6 canaries right;
+    - Sol is the current generation and was the strictest;
+    - it costs about the same per item.
   - **Hard cap: $50/month** for model spend, enforced in code. Over the cap, items wait for
     the next cycle. Expected spend is about $20–40/month at pilot volume.
 - ✅ **Early read-only launch** (Randall, 2026-09-30): "keep going in order, but yes, launch

@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 // Model spend, as an append-only JSONL ledger (one line per call) in the data
 // directory. Appending never truncates, so a crash mid-write cannot lose the
@@ -34,7 +35,11 @@ export class SpendLedger {
     return total;
   }
 
+  // Creates its directory if needed: a spend record must never be lost because
+  // the data directory did not exist yet (found in the first live smoke test,
+  // which lost one call's cost this way).
   append(entry: SpendEntry): void {
+    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
     appendFileSync(this.path, JSON.stringify(entry) + "\n", { mode: 0o600 });
   }
 }

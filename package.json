@@ -15,9 +15,11 @@
     "demo": "node scripts/demo-loop.ts",
     "cli": "node scripts/noosphere.ts",
     "check": "npm run build && npm test && npm run demo",
-    "librarian": "node scripts/librarian.ts"
+    "librarian": "node scripts/librarian.ts",
+    "librarian-smoke": "node scripts/librarian-smoke.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
     "@fastify/swagger": "^9.9.0",
     "ajv": "^8.20.0",
     "better-sqlite3": "^13.0.3",
