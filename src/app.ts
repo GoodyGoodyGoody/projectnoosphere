@@ -80,6 +80,9 @@ export interface AppOptions {
   // Which peer may set X-Forwarded-For. In production: the local nginx only
   // ("127.0.0.1"). Never true — that would let any client choose its own IP.
   trustProxy?: false | string;
+  // The running code's identity, reported by /readyz so a release can prove
+  // which commit every worker is serving (scripts/release.sh asserts it).
+  version?: string;
   testHooks?: TestHooks;
 }
 
@@ -290,7 +293,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
       db.prepare("SELECT 1").get();
       const pending = pendingMigrations(db);
       if (pending.length) return reply.code(503).send({ status: "migrations_pending", pending });
-      return { status: "ready", schema_version: schemaVersion(db) };
+      return { status: "ready", schema_version: schemaVersion(db), version: opts.version ?? "dev" };
     } catch {
       return reply.code(503).send({ status: "database_unavailable" });
     }

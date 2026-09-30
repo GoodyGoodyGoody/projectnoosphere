@@ -175,7 +175,7 @@ describe("records and exact revisions", () => {
   test("health, readiness, and the agent guide respond", async () => {
     assert.equal((await t.app.inject({ url: "/healthz" })).json().status, "ok");
     const migrations = readdirSync(join(import.meta.dirname, "..", "migrations")).filter((f) => f.endsWith(".sql")).length;
-    assert.deepEqual((await t.app.inject({ url: "/readyz" })).json(), { status: "ready", schema_version: migrations });
+    assert.deepEqual((await t.app.inject({ url: "/readyz" })).json(), { status: "ready", schema_version: migrations, version: "dev" });
     // The guide is served twice: as a page for people and as Markdown for agents.
     const md = await t.app.inject({ url: "/agent-guide.md" });
     assert.match(md.headers["content-type"] as string, /^text\/markdown/);

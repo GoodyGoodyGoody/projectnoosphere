@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import { buildApp, DEFAULT_CONTENT_LICENSE, DEFAULT_PUBLIC_ORIGIN } from "./app.ts";
 import { openDb, pendingMigrations } from "./db.ts";
 import { DB_PATH } from "./paths.ts";
@@ -18,7 +20,20 @@ if (pending.length) {
   process.exit(1);
 }
 
+// The commit this process is running, read once at startup from its own
+// checkout (the production checkout is always at a release commit).
+function codeVersion(): string {
+  try {
+    return execFileSync("git", ["rev-parse", "--short=12", "HEAD"], {
+      cwd: join(import.meta.dirname, ".."), encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 const app = buildApp({
+  version: codeVersion(),
   db,
   contentLicense: process.env.NOOSPHERE_CONTENT_LICENSE || DEFAULT_CONTENT_LICENSE,
   publicOrigin: (process.env.PUBLIC_ORIGIN || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, ""),
