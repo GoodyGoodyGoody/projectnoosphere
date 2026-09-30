@@ -31,7 +31,11 @@ Everything the steps rely on has already been rehearsed:
 ## 1. Production data and identities (on-box, this project only)
 **Do:**
 - `mkdir -m 700 /home/randall/.projectnoosphere-data`
-- In the production checkout, `git checkout --detach v0.1.0`.
+- In the production checkout:
+  - `git checkout --detach v0.1.0`
+  - `npm ci` (the production `node_modules` predates `@sentry/node`; without this the first
+    start crash-loops)
+  - `npm run check`, which gives the first release the same gate every later one gets.
 - Run the migrations: `SITE_DATA_DIR=/home/randall/.projectnoosphere-data npm run cli -- migrate`.
 - Create two contributors, and put their tokens straight into the production `.env`
   (never printed to the chat):
@@ -44,8 +48,22 @@ passes.
 
 **Undo:** delete the data directory. Nothing is public yet.
 
-## 2. Register the site (Shared: `~/bin/sites.json`)
+## 2. Register the site (Shared: `~/bin/new-site` fix, `~/bin/sites.json`)
 **Do:**
+- **First, fix `new-site`** by applying `deploy/new-site-no-app.patch` to `~/bin/new-site`,
+  then commit and push `~/bin`.
+  - **The bug:** `prepare --no-app` is documented as "wire an existing repo; do not
+    scaffold", yet it scaffolds. On a throwaway copy it wrote `server.mjs`, `src/lib/`
+    templates, and a generic **`ecosystem.config.js`**.
+  - **Why it matters here:** `deploy-site` loads that file *before* our
+    `ecosystem.config.cjs`, and the new files would make the production checkout dirty.
+  - **What the patch does:** skips scaffolding only when the repo already has its own
+    ecosystem config.
+  - **Tested on throwaway copies:** Noosphere's copy stays clean. bot-selftest's
+    `--no-app` fixture behaves exactly as before (`.env.local` mode 600, vhost, structural
+    doctor passes, `--ready` refuses).
+  - **Check:** the Monday `bot-selftest` stays green.
+  - **Undo:** `git revert` in `~/bin`.
 - `~/bin/new-site prepare projectnoosphere projectnoosphere.org --kind node --data sqlite
   --visibility public --indexable yes --criticality normal --no-app --dry-run`, then the same
   without `--dry-run`. It should allocate port **3012**; stop if it doesn't.
@@ -82,22 +100,31 @@ passes.
 - GET again: only A `@` changed.
 - `dig @ns69.domaincontrol.com projectnoosphere.org A` returns 209.97.151.200.
 
-**Undo:** PUT A `@` back to `"Parked"`.
+**Undo** (⚠️ **unverified**): PUT A `@` back to `"Parked"`. "Parked" is GoDaddy's
+pseudo-value, and the API may not accept it on write. The fallback is to point A `@` at
+GoDaddy's parking addresses seen before launch (15.197.148.33 and 3.33.130.190), or
+re-park the domain in the GoDaddy dashboard.
 
 ## 5. nginx and HTTPS (Shared: nginx; certbot)
 **Do:**
-- Install `deploy/nginx/projectnoosphere.conf`: the gen-vhost output plus the search rate
-  limit.
-- `sudo nginx -t`, then reload nginx.
-- `sudo certbot --nginx -d projectnoosphere.org -d www.projectnoosphere.org`. This needs step
-  4 to have propagated.
+1. `cp deploy/nginx/projectnoosphere.conf /tmp/projectnoosphere.conf`
+2. `sudo mv /tmp/projectnoosphere.conf /etc/nginx/sites-available/projectnoosphere`
+3. `sudo ln -sf /etc/nginx/sites-available/projectnoosphere /etc/nginx/sites-enabled/projectnoosphere`
+4. `sudo nginx -t && sudo systemctl reload nginx`
+5. `sudo certbot --nginx -d projectnoosphere.org -d www.projectnoosphere.org`. This needs step
+   4 to have propagated.
 
 **Check:**
 - http → https 301; https `/readyz` 200; www → apex 301.
 - `/robots.txt` and `/sitemap.xml` are served.
 - 40 rapid `/api/v1/search` requests produce some 429s.
 
-**Undo:** remove the sites-enabled link, reload nginx, then `certbot delete`.
+**Undo:** overwrite the site config rather than removing it:
+1. Move a comment-only `/tmp/projectnoosphere.conf` over the site config, then
+   `sudo nginx -t && sudo systemctl reload nginx`.
+2. `sudo certbot delete --cert-name projectnoosphere.org`.
+
+Randall can remove the leftover link later at a real shell.
 
 ## 6. Error tracking (Shared: Sentry, org lifeguardfindercom)
 **Do:**
