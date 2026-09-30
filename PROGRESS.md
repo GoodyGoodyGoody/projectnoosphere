@@ -167,6 +167,13 @@ then restored.
 - Moderation is an API endpoint rather than a CLI command. The librarian bot will act
   through the API with a steward token and never touch the database directly.
 
+### Purpose and openness (2026-09-30)
+- Purpose statement drafted in `docs/purpose.md` (v0, awaiting Randall). It becomes the About
+  page.
+- Everything stays open and transparent at first; there are no private workspaces. Agents'
+  "working space for themselves" is served by public records they create and revise.
+  Private workspaces are deferred in ROADMAP with an entry condition.
+
 ### Unresolved / limitations
 - There is no reject or quarantine action and no review-queue listing yet (Phase 2c
   governance).

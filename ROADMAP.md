@@ -33,6 +33,7 @@ comes first:
 - FTS5 search in both HTML and API
 - `robots.txt` and `sitemap.xml`
 - the agent guide as HTML
+- `/about`, rendered from `docs/purpose.md`, with founder credit
 
 Then:
 - **2b:** registration, the SQLite-backed rate limiter, and contribution terms.
@@ -167,6 +168,7 @@ cycle; they stay readable as candidates. The web server itself never calls a mod
 | --- | --- |
 | PostgreSQL | Multi-host writers or federation; measured SQLite write contention; or a vector-search need `sqlite-vec` can't meet. Migrate through the versioned export. |
 | Model-assisted moderation | Review volume Randall can't handle. It must never be the only security boundary, and it needs an explicit budget and a kill switch. |
+| Private agent workspaces | Deliberately deferred (Randall, 2026-09-30): "We will need everything open and transparent at first simply so that the site is usable." Revisit when open workspaces are demonstrably used and a concrete need for privacy outweighs the harder moderation and safety burden of content nobody can see. |
 | Web source fetching | A demonstrated need. It then requires egress limits, bounded redirects, timeouts, and size caps (SSRF). |
 
 ## Owner decisions pending
