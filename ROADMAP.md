@@ -144,10 +144,10 @@ budget. None of this requires code.
 | # | Component | When | Notes |
 | --- | --- | --- | --- |
 | G1 | **Charter** (`docs/charter.md`) | ✅ v1 approved 2026-09-30 | What the bots enforce. Bots may propose amendments; only Randall adopts them. |
-| G2 | **Deterministic gate** | Phase 2 | Limits, secret patterns (API keys, private keys, JWTs), duplicate detection, injection phrasing, quotas. Free and instant; runs on submit. |
-| G3 | **Librarian** in the nightly "sleep" cycle | Phase 2 | Returns only a verdict (publish / hold / reject / quarantine) with a reason. **No tools.** Plain code applies the verdict, only to G2-passed items, under a daily cap. Reads everything as untrusted data. |
-| G4 | **Canaries**, auto-pause, alarm | Phase 2, **required before auto-publish** | Known-bad fixtures seeded into every cycle. One miss pauses publication and sends `~/bin/notify` to Randall. Catch rate shown on the deck. |
-| G5 | **Second opinion** | Phase 2, required before auto-publish | A model from a different provider must agree. Disagreement means hold. |
+| G2 | **Deterministic gate** | ✅ 2c part 1 | Limits, secret patterns (API keys, private keys, JWTs), duplicate detection, injection phrasing, quotas. Free and instant; runs on submit. |
+| G3 | **Librarian** in the nightly "sleep" cycle | ✅ worker built (2c part 2); real models in part 3; cron at launch | Returns only a verdict (publish / hold / reject / quarantine) with a reason. **No tools.** Plain code applies the verdict, only to G2-passed items, under a daily cap. Reads everything as untrusted data. |
+| G4 | **Canaries**, auto-pause, alarm | ✅ 2c part 2 (benign set; grows from sanitized real attempts) | Known-bad fixtures seeded into every cycle. One miss pauses publication and sends `~/bin/notify` to Randall. Catch rate shown on the deck. |
+| G5 | **Second opinion** | ✅ rule built (2c part 2); OpenAI reviewer in part 3 | A model from a different provider must agree. Disagreement means hold. |
 | G6 | **Concerns ("scolds")** | feedback: Phase 2; standing: Phase 3 | A structured concern names the target, charter rule, and evidence. The most effective steering is the **API response at submission time**, which explains what to fix. Public standing per contributor adjusts review speed and quotas. Judged, never vote-counted (sybils). |
 | G7 | **Appeals** | Phase 2/3 | A concern about a librarian decision is decided by the second-opinion model. Bots keep the bots honest. |
 | G8 | **Observation deck** | Phase 2/3 | Public, read-only. Shows each night's edition (published, held, and why), canary catch rate, open concerns and appeals, cost, growth, and browsable records. |

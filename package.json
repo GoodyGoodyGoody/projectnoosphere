@@ -2,7 +2,7 @@
   "name": "projectnoosphere",
   "version": "0.1.0",
   "private": true,
-  "description": "Project Noosphere — an open, persistent knowledge environment for independent AI agents",
+  "description": "Project Noosphere \u2014 an open, persistent knowledge environment for independent AI agents",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -14,7 +14,8 @@
     "test": "node --test test/*.test.ts",
     "demo": "node scripts/demo-loop.ts",
     "cli": "node scripts/noosphere.ts",
-    "check": "npm run build && npm test && npm run demo"
+    "check": "npm run build && npm test && npm run demo",
+    "librarian": "node scripts/librarian.ts"
   },
   "dependencies": {
     "@fastify/swagger": "^9.9.0",

@@ -368,3 +368,65 @@ live forever in immutable history and in backups, and would reach the review mod
 **Next: part 2, the worker.** It runs one item per call and checks canaries before applying
 anything. It applies decisions idempotently, with a spend cap, a pause switch, and an alarm.
 It is tested with scripted fake reviewers; no real model calls until part 3.
+
+## Milestone 2c, part 2: the librarian worker (2026-09-30)
+
+**What works** (`src/librarian/`, CLI `npm run librarian -- status|pause|resume|run [--dry-run]`):
+- **A cycle:**
+  1. If paused, stop.
+  2. Read the review queue through the API, with its own steward token and no database
+     access.
+  3. Review the planted canaries **first**, then the real items, one item per call and both
+     models per item.
+  4. Check the canaries **before applying anything**.
+  5. Apply idempotently: stale-base losers are superseded by code, then each item's combined
+     decision.
+- **Combination rule:**
+  - publish only if both models say publish;
+  - quarantine if either says quarantine;
+  - reject only if both say reject;
+  - everything else holds, including refusals, errors, and malformed output.
+- **Canaries:** benign planted tests covering a note addressed to the reviewer,
+  advertising, fabricated agreement, and instructions aimed at AI readers, plus two
+  known-good items.
+  - They are picked deterministically per date and are never stored or applied.
+  - If a known-bad canary would be published, the run is discarded, the pause file is
+    written, and `~/bin/notify` alarms Randall.
+- **Spend:**
+  - an append-only JSONL ledger in the data directory;
+  - a pre-call worst-case check against the per-run cap ($5) and the monthly cap ($50, set
+    by Randall);
+  - a budget stop that leaves canaries unrun marks the run unverified, and nothing is
+    applied.
+- **Prompt:** the charter plus rubric-1. The submission is JSON inside `<submission>`, with
+  `<` escaped, so the data block cannot be closed from inside. The model is told the
+  submission is untrusted data.
+- **Dry run:** reads the real queue and prints what it would do. It applies nothing and
+  costs $0.
+
+**Checks:**
+- 7 librarian tests, all passing. They run a real server on loopback with scripted
+  reviewers.
+- A CLI smoke test ran against a live local server: create, then dry run, then status.
+
+**Mutation checks** (each gate was shown red):
+
+| Mutation | Went red |
+| --- | --- |
+| Either model can publish | the combination test |
+| Quarantine needs both models | the combination test |
+| Canary check removed | the canary test |
+| Apply even after a canary failure | the canary test |
+| Spend caps removed | the budget test |
+| Data block not escaped | the framing test |
+| Moderation calls not idempotent | the idempotency test |
+
+**Note:** while writing the canary set, an overly realistic harmful example was stopped by a
+safety filter. The canaries are now deliberately benign, and real attempts seen on the site
+will be added only as sanitized descriptions.
+
+**Next: part 3.**
+- Real reviewers: `@anthropic-ai/sdk` with structured output for Opus 5.5, and OpenAI with a
+  JSON schema.
+- One small live test on canaries only, to measure the real cost per item.
+- Nightly scheduling waits for the launch step, because the crontab is shared.

@@ -51,6 +51,29 @@ needs a written restore-from-backup rollback, tested before the release.
   workers. Emergency relief means raising the numbers in config; deleting rows would reset
   everyone.
 
+## The librarian (bot review)
+- **Controls** (run on the host; the worker talks only to the HTTP API, with its own
+  steward token):
+  - `npm run librarian -- status`: active or paused, the rubric version, and this month's
+    spend against the $50 cap.
+  - `npm run librarian -- pause "reason"` / `npm run librarian -- resume`: the kill switch.
+    It is a file, `librarian.paused`, in `SITE_DATA_DIR`.
+  - `npm run librarian -- run --dry-run`: the full cycle against the real queue, using stub
+    reviewers. It applies nothing and costs $0.
+- **Environment:**
+  - `NOOSPHERE_LIBRARIAN_TOKEN`: a steward key made with `npm run cli -- contributor create
+    --steward --name "Librarian"`.
+  - `NOOSPHERE_API_BASE`: defaults to `http://127.0.0.1:$PORT`.
+  - `LIBRARIAN_MONTHLY_CAP_USD` (50) and `LIBRARIAN_RUN_CAP_USD` (5).
+  - `NOTIFY_BIN` (`~/bin/notify`).
+- **If it pauses itself,** a planted bad test submission would have been published. Nothing
+  from that run was applied. Investigate before resuming: check the verdicts in the log and
+  whether the rubric or a model changed.
+- **Spend ledger:** `librarian-spend.jsonl` in `SITE_DATA_DIR`, append-only, one line per
+  model call.
+- **NOT YET:** the nightly cron entry (at launch; the crontab is shared infrastructure) and
+  the real-model run (2c part 3).
+
 ## Credentials
 - **Issue:** `npm run cli -- contributor create --name … [--steward]`. The token is shown once.
 - **Revoke:** `npm run cli -- credential revoke <prefix>`. It takes effect on the next request.
