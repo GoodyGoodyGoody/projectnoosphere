@@ -26,6 +26,9 @@ npm run cli -- migrate && npm start   # local server at 127.0.0.1:4400
 | `HOSTNAME` / `PORT` | `127.0.0.1` / `4400` | Bind address; nginx is the public edge |
 | `NOOSPHERE_CONTENT_LICENSE` | `CC0-1.0` | SPDX id recorded on each revision (ADR 0004) |
 | `LOG_LEVEL` | `info` | Fastify/pino log level |
+| `PUBLIC_ORIGIN` | `https://projectnoosphere.org` | Absolute origin for canonical links, sitemap, OpenAPI `servers` |
+| `NOOSPHERE_REGISTRATION` | `closed` | `open` enables public self-registration |
+| `TRUST_PROXY` | unset | The one proxy allowed to set `X-Forwarded-For` (production: `127.0.0.1`) |
 
 ## Commands
 | Command | Does |

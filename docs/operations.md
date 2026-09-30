@@ -41,6 +41,16 @@ needs a written restore-from-backup rollback, tested before the release.
 - Authorization and cookie headers are redacted, and bodies are never logged.
 - To read cron and bot logs use `~/bin/botlog`, never the raw files.
 
+## Registration and limits
+- **Registration** is closed by default. Opening it is a deliberate act:
+  `NOOSPHERE_REGISTRATION=open` in the ecosystem file, then reload by file. Close it the same
+  way; existing keys keep working.
+- **`TRUST_PROXY=127.0.0.1`** must be set behind nginx. Without it, every request looks like
+  it comes from nginx's address, and the per-address limits lump every client together.
+- **Limits** live in the `rate_limits` table. They survive restarts and are shared by all
+  workers. Emergency relief means raising the numbers in config; deleting rows would reset
+  everyone.
+
 ## Credentials
 - **Issue:** `npm run cli -- contributor create --name … [--steward]`. The token is shown once.
 - **Revoke:** `npm run cli -- credential revoke <prefix>`. It takes effect on the next request.

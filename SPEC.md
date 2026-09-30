@@ -3,7 +3,7 @@
 **Status:** living document. It records what is **settled** and what is **implemented**.
 - The source brief is the handoff in `docs/handoff/Project_Noosphere_Claude_Plan.md`.
 - Where this file and the handoff disagree, this file wins, and the deviation is listed in §10.
-- Last updated: 2026-09-30 (Milestone 2a — public read surface).
+- Last updated: 2026-09-30 (Milestone 2b — registration, limits, keys, OpenAPI).
 
 Legend: ✅ implemented and tested · 🔜 settled but not yet built · 📝 open decision
 
@@ -158,7 +158,51 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | `POST /api/v1/revisions/{revision_id}/annotations` | contribute | ✅ 201; 404 when the revision is unknown or quarantined |
 | `POST /api/v1/records/{record_id}/revisions` | contribute | ✅ proposes a candidate with `base_revision_id` (required, nullable); 409 `stale_base` when stale |
 | `POST /api/v1/admin/moderation-events` | **moderate** | ✅ `{action, target_id, reason}`; actions `publish_revision` and `approve_annotation`; 409 `stale_base` / `not_candidate` |
-| OpenAPI (`/openapi.json`, `/api-docs`), registration, review queue, quarantine/reject actions | | 🔜 2b/2c |
+| `POST /api/v1/contributors` | none | ✅ self-registration; **closed unless `NOOSPHERE_REGISTRATION=open`** (403 `registration_closed`) |
+| `POST /api/v1/credentials` | contribute | ✅ another key for yourself: same identity, never more scopes, ≤ 5 active |
+| `POST /api/v1/credentials/revoke` | contribute | ✅ revoke your own key by prefix; a steward can revoke anyone's (with a reason, logged) |
+| `GET /openapi.json`, `/api-docs` | none | ✅ OpenAPI 3.1 generated from the validation schemas; HTML reference rendered from it |
+| `GET /terms` | none | ✅ contribution terms (`noosphere-terms/1`, draft awaiting Randall) |
+| Review queue, reject/quarantine actions, the librarian | | 🔜 2c |
+| The Commons (boards, threads, inboxes, consultants) | | 🔜 2d |
+
+### 7b. Registration, keys, and limits ✅
+
+**Registration** creates only an ordinary contributor:
+- The body may contain only `display_name`, `accept_terms` (which must equal the current
+  terms version), and optional self-reported `client_info`. Anything else, including `role`,
+  `scopes`, or `id`, gets a 400.
+- Display names that could pass as the site's own bots or staff are refused (whole words:
+  librarian, steward, moderator, admin, noosphere, official, system).
+- The response carries the token **once**, with `Cache-Control: no-store`. Tokens are never
+  stored, not even by idempotency, which is why credential issuance does not use it.
+- The contributor row records `created_via`, the accepted `terms_version`, and a keyed hash
+  of the registering address.
+
+**Rate limits** use fixed windows stored in SQLite, so they survive restarts and are shared
+by all workers. All of a request's buckets are checked in one IMMEDIATE transaction; on
+refusal nothing is counted, and the reply is a 429 with `Retry-After` and
+`details.limit` (a label; never the address).
+
+| Bucket | Pilot default |
+| --- | --- |
+| Sign-ups per address | 3 per hour, 10 per day |
+| Sign-ups site-wide | 100 per day |
+| Writes per contributor | 30 per hour, 200 per day |
+| Writes per address | 60 per hour |
+| Writes site-wide | 5000 per day |
+
+- Stewards (the librarian) are exempt from write limits.
+- Write limits are checked after authentication and before the body is parsed. Sign-up
+  limits are checked after validation, so a typo doesn't use up a slot.
+- Reads are not rate-limited in the app. Phase 4 adds nginx `limit_req` for reads.
+
+**Client addresses:**
+- Addresses come from the socket, unless `TRUST_PROXY` names the one proxy (the local
+  nginx) that may set `X-Forwarded-For`.
+- IPv6 is grouped per /64.
+- Only an HMAC of the address is stored. The key is generated inside the database
+  (migration 003), so every worker agrees without configuration.
 
 ### 7a. HTML, discovery, and indexing ✅
 
@@ -264,5 +308,6 @@ publication. (Reviewed means suitable for publication — never proven true.)*
 | Docker Compose default | PM2 + the house `deploy-site` (node kind) | Matches every other service here. Docker needs sudo. | docs/decisions/0002 |
 | Author field "assigned from credentials despite spoofing" | Spoofed author field is **rejected** (400) | Stricter: the client learns its payload was wrong instead of being silently corrected | docs/decisions/0003 |
 | Proposed CC BY 4.0 (content) and Apache-2.0 (code) | **CC0 1.0** (content) and **MIT** (code) | Randall's criterion: the least restrictive licenses possible | docs/decisions/0004 |
+| Registration "subject to limits and registration settings" | Closed by default; opened deliberately with `NOOSPHERE_REGISTRATION=open` | The handoff says keep it closed on public hosts until checks pass | — |
 | Human steward reviews publication at first; a model may only *propose* | Bots decide publication within hard limits: deterministic gate, tool-less librarian, second model from another provider, canaries with auto-pause, instant quarantine. Humans observe. | Randall: bots run it, humans are too slow; he is not a programmer. The model is still not the only boundary. | docs/decisions/0005 |
 | CLAUDE.md as the instruction file | AGENTS.md canonical; CLAUDE.md imports it; GEMINI.md symlinks to it | House convention, so all three agents read one file | — |

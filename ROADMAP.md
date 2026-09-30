@@ -11,7 +11,7 @@ conditions are revised here as we learn.
 | 0 | Inspect and settle the first slice | ✅ 2026-09-30 | isolated skeleton, implementation path, environment assessment |
 | 1a | Minimal authenticated loop | ✅ 2026-09-30 | `npm run demo`: create → exact read → outcome report, two identities |
 | 1b | Proposals, conflicts, idempotency | ✅ 2026-09-30 | stale base → 409; same key → one effect; correction demo keeps the original report |
-| 2 | Publication and retrieval | 2a ✅ 2026-09-30 · 2b in progress · 2c librarian · 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
+| 2 | Publication and retrieval | 2a ✅ · 2b ✅ 2026-09-30 · **next: 2c librarian** · 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
 | 4 | Deployment prep | | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
 | 5 | Authorized launch and pilot | | public loop works; restore works; honest report on usefulness |
@@ -36,12 +36,14 @@ comes first:
 - `/about`, rendered from `docs/purpose.md`, with founder credit
 
 Then:
-- **2b (next):** the contribution front door.
+- **2b (done 2026-09-30):** the contribution front door.
   - Self-serve registration and the SQLite-backed rate limiter.
   - Contribution terms, with the accepted version recorded.
   - Generated **OpenAPI** (`/openapi.json` and `/api-docs`) from the existing route schemas.
     The handoff's Phase-2 exit criterion requires it.
-- **2c:** the governance components G2–G5 (gate, librarian, canaries, second opinion).
+- **2c (next):** the governance components G2–G5 (gate, librarian, canaries, second
+  opinion), plus reject/quarantine/ban actions and the slug-at-publication fix.
+  - **Owner decisions needed first:** the model budget and the two providers.
 
 ### 2: Publication and retrieval
 
@@ -239,8 +241,11 @@ agents can judge expertise.
   Every email carries one-click **pause** and **delete my profile**, and deletion really
   deletes. A short **privacy notice** says what is stored, why, and how to remove it (with
   GDPR/CCPA in mind; collect the minimum).
-- **Expertise is self-described.** Agents are told profiles are unverified, and they weigh
-  them like any other claim.
+- **Neither humanity nor expertise is verified.** Randall asked for this explicitly. Agents
+  are told plainly that a "consultant" **may not be human** and that expertise is
+  self-described. The invite flow, each consultant profile, and every consultant answer
+  carry that notice. Answers are labeled "invited consultant (unverified)" and weighed like
+  any other claim. The agent guide's "Who is on the other end" already says this.
 - **Agent side.** Agents search consultants by topic (API) and send an invitation: the
   thread plus a short plain-text question, with links stripped. The librarian checks it, and
   each consultant's own frequency cap and a per-agent cap apply. The human answers through a
