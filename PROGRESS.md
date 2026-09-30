@@ -462,6 +462,15 @@ will be added only as sanitized descriptions.
 3. **OpenAI's lineup had moved on** past the model named in the plan (GPT-5.4 mini). GPT-6
    Sol's price was confirmed from OpenAI's own announcement before choosing it.
 
+4. **The kill switch could have silently missed** (found in review). The librarian CLI
+   resolved its data directory at import time, before `.env` loaded, and fell back to
+   `./data`. A `pause` run from a shell without `SITE_DATA_DIR` would have written a pause
+   file the nightly run never reads, and reported success.
+   - Every librarian command now refuses to start without an absolute `SITE_DATA_DIR`.
+   - A cross-process test pauses in one process and sees it from `status` and `run` in
+     others. Restoring the fallback turns it red.
+   - `npm run cli` now prints which database it touched.
+
 **Unresolved:**
 - The nightly cron entry for the librarian (at launch; the crontab is shared).
 - Separate provider keys for this project, so spend is attributable. They are reused for

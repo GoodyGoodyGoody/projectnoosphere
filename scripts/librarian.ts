@@ -8,22 +8,32 @@
 //   npm run librarian -- run                # real models: Claude Opus 5.5 + GPT-6 Sol
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { NoosphereClient } from "../src/librarian/client.ts";
 import { scriptedReviewer } from "../src/librarian/fake.ts";
 import { anthropicReviewer, openaiReviewer } from "../src/librarian/providers.ts";
 import { RUBRIC_VERSION } from "../src/librarian/prompt.ts";
 import { runCycle } from "../src/librarian/run.ts";
 import { SpendLedger } from "../src/librarian/spend.ts";
-import { DATA_DIR } from "../src/paths.ts";
 
-// Provider keys live in this repo's .env (gitignored, mode 600).
+// Provider keys (and, for cron, SITE_DATA_DIR) live in this repo's .env
+// (gitignored, mode 600). NOOSPHERE_ENV_FILE overrides the path (tests).
 try {
-  process.loadEnvFile(join(import.meta.dirname, "..", ".env"));
+  process.loadEnvFile(process.env.NOOSPHERE_ENV_FILE ?? join(import.meta.dirname, "..", ".env"));
 } catch {
   /* no .env: only status/pause/resume/dry-run work */
 }
 
+// The pause file and the spend ledger MUST be the production ones. Resolving
+// them from src/paths.ts would be wrong twice over: that module is evaluated at
+// import time (before .env loads), and it falls back to ./data — so a `pause`
+// run from a shell without SITE_DATA_DIR would write a pause file the nightly
+// run never reads, and report success. So: no fallback, ever.
+const DATA_DIR = process.env.SITE_DATA_DIR ?? "";
+if (!DATA_DIR || !isAbsolute(DATA_DIR)) {
+  console.error("SITE_DATA_DIR must be set to an absolute path (the same one the site and the nightly run use).");
+  process.exit(2);
+}
 const PAUSE_FILE = join(DATA_DIR, "librarian.paused");
 const LEDGER = new SpendLedger(join(DATA_DIR, "librarian-spend.jsonl"));
 const MONTHLY_CAP = Number(process.env.LIBRARIAN_MONTHLY_CAP_USD ?? 50); // Randall's cap, 2026-09-30
@@ -43,6 +53,7 @@ const [cmd, ...rest] = process.argv.slice(2);
 const month = new Date().toISOString().slice(0, 7);
 
 if (cmd === "status") {
+  console.log(`data: ${DATA_DIR}`);
   console.log(existsSync(PAUSE_FILE) ? `PAUSED — ${readFileSync(PAUSE_FILE, "utf8").trim()}` : "active");
   console.log(`rubric ${RUBRIC_VERSION}; spend ${month}: $${LEDGER.monthTotal(month).toFixed(4)} of $${MONTHLY_CAP}`);
 } else if (cmd === "pause") {

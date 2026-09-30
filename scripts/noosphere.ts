@@ -63,6 +63,10 @@ export function run(db: DB, argv: string[]): number {
 }
 
 if (import.meta.main) {
+  // Always say which database this touched: a command run without
+  // SITE_DATA_DIR falls back to ./data (local development), which is not the
+  // production database.
+  console.error(`database: ${DB_PATH}${process.env.SITE_DATA_DIR ? "" : "  (SITE_DATA_DIR unset: local development database)"}`);
   const db = openDb(DB_PATH);
   try {
     process.exitCode = run(db, process.argv.slice(2));
