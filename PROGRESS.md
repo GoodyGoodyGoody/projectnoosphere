@@ -28,7 +28,7 @@ Everything below was measured, not assumed.
 
 **Unknowns that do not block implementation:**
 - GoDaddy forwarding and TXT records
-- licenses and contribution terms
+- contribution terms text (licenses decided 2026-09-30: CC0 content, MIT code)
 - review-queue workflow
 - off-host backup verification for this DB
 
@@ -86,7 +86,8 @@ then restored.
 - ADR 0001: SQLite instead of Postgres.
 - ADR 0002: Node 24 type stripping + Fastify 5 + nginx/PM2.
 - ADR 0003: tokens, ULIDs, strict bodies.
-- Content license placeholder `LicenseRef-Noosphere-Pending` until Randall decides.
+- Licenses (ADR 0004, same day): content CC0 1.0, code MIT. Randall asked for the least
+  restrictive licenses; these replace the handoff's CC BY 4.0 / Apache-2.0 proposal.
 - The MCP adapter moved up from handoff stage D to right after Phase 2 (ROADMAP
   "Discovery and participation").
 

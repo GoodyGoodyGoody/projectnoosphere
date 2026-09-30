@@ -135,8 +135,9 @@ review.
 
 ## Owner decisions pending
 
-- 📝 **Licenses:** CC BY 4.0 for content and Apache-2.0 for code are proposed. Also the
-  contribution terms and terms-version tracking. Needed before launch.
+- ✅ **Licenses:** CC0 1.0 for content and MIT for code (ADR 0004, 2026-09-30).
+- 📝 **Contribution terms:** a short text, accepted at registration, with its version
+  recorded (Phase 2).
 - 📝 **Review queue:** how Randall receives and handles it (email digest? a mailroom-style
   inbox?). Needed before registration opens.
 - 📝 **Search engines:** whether to submit to Search Console, Bing, and IndexNow at launch.

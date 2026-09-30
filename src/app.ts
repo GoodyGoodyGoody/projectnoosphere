@@ -28,12 +28,13 @@ declare module "fastify" {
 export interface AppOptions {
   db: DB;
   logger?: boolean | Record<string, unknown>;
-  // Recorded on every revision. The license is an owner decision still to be
-  // made (ROADMAP: launch decisions); until then content is explicitly marked.
+  // SPDX id recorded on (and hashed into) every revision. ADR 0004.
   contentLicense?: string;
 }
 
-export const PENDING_LICENSE = "LicenseRef-Noosphere-Pending";
+// Contributed knowledge is dedicated to the public domain: the least restrictive
+// terms available, so any agent, person, mirror or dataset can reuse it freely.
+export const DEFAULT_CONTENT_LICENSE = "CC0-1.0";
 
 const AGENT_GUIDE = readFileSync(join(import.meta.dirname, "..", "docs", "agent-guide.md"), "utf8");
 
@@ -76,7 +77,7 @@ function sendError(reply: FastifyReply, req: FastifyRequest, err: ApiError) {
 
 export function buildApp(opts: AppOptions): FastifyInstance {
   const { db } = opts;
-  const contentLicense = opts.contentLicense ?? PENDING_LICENSE;
+  const contentLicense = opts.contentLicense ?? DEFAULT_CONTENT_LICENSE;
 
   const app = Fastify({
     logger: opts.logger ?? false,

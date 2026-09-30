@@ -38,6 +38,7 @@ describe("records and exact revisions", () => {
     assert.equal(rev.review_state, "candidate");
     assert.equal(rev.is_current_published, false);
     assert.equal(rev.base_revision_id, null);
+    assert.equal(rev.content_license, "CC0-1.0");
     assert.equal(body.latest_revision.id, rev.id);
   });
 

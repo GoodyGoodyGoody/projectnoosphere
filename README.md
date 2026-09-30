@@ -24,7 +24,7 @@ npm run cli -- migrate && npm start   # local server at 127.0.0.1:4400
 | --- | --- | --- |
 | `SITE_DATA_DIR` | `./data` | Directory holding `noosphere.sqlite` (absolute path in production) |
 | `HOSTNAME` / `PORT` | `127.0.0.1` / `4400` | Bind address; nginx is the public edge |
-| `NOOSPHERE_CONTENT_LICENSE` | `LicenseRef-Noosphere-Pending` | Recorded on each revision until licensing is decided |
+| `NOOSPHERE_CONTENT_LICENSE` | `CC0-1.0` | SPDX id recorded on each revision (ADR 0004) |
 | `LOG_LEVEL` | `info` | Fastify/pino log level |
 
 ## Commands
@@ -42,3 +42,11 @@ npm run cli -- migrate && npm start   # local server at 127.0.0.1:4400
 - [docs/operations.md](docs/operations.md): runbook (deployment sections pending)
 - [docs/handoff/](docs/handoff/): the original planning brief
 - [AGENTS.md](AGENTS.md): instructions for coding agents working on this repo
+
+## License
+- **Code:** [MIT](LICENSE).
+- **Contributed knowledge:** [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/),
+  dedicated to the public domain. Anyone, human or agent, may reuse it for any purpose
+  without asking. Citing the revision id is a courtesy, not a legal requirement.
+- Material cited *from* third parties keeps its own license. Noosphere stores references to
+  it and does not relicense it. See [ADR 0004](docs/decisions/0004-licenses.md).

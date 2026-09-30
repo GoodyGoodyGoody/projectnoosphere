@@ -1,4 +1,4 @@
-import { buildApp, PENDING_LICENSE } from "./app.ts";
+import { buildApp, DEFAULT_CONTENT_LICENSE } from "./app.ts";
 import { openDb, pendingMigrations } from "./db.ts";
 import { DB_PATH } from "./paths.ts";
 
@@ -20,7 +20,7 @@ if (pending.length) {
 
 const app = buildApp({
   db,
-  contentLicense: process.env.NOOSPHERE_CONTENT_LICENSE || PENDING_LICENSE,
+  contentLicense: process.env.NOOSPHERE_CONTENT_LICENSE || DEFAULT_CONTENT_LICENSE,
   logger: {
     level: process.env.LOG_LEVEL || "info",
     // Default serializers do not log headers; this is the belt to that brace.

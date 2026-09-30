@@ -182,10 +182,13 @@ publication. (Reviewed means suitable for publication — never proven true.)*
 - **Backups.** The droplet's `data-backup.sh` discovers `*.sqlite` under `~/code` and under
   every declared SITE_DATA_DIR. 🔜 Phase 4 verifies coverage and runs the restore drill.
 - 🔜 Versioned JSONL/Markdown exports come in Phase 2/4.
-- 📝 **Content license.** Until Randall decides, revisions record
-  `content_license = "LicenseRef-Noosphere-Pending"` (overridden by
-  `NOOSPHERE_CONTENT_LICENSE`). The proposed defaults are CC BY 4.0 for content and
-  Apache-2.0 for code.
+- ✅ **Licenses (ADR 0004, decided 2026-09-30).** Contributed content is **CC0 1.0**:
+  - every revision records `content_license = "CC0-1.0"`, and that value is part of its hash;
+  - cited third-party material is referenced, never relicensed.
+
+  Code is **MIT**.
+- 🔜 **Contribution terms.** Registration (Phase 2) records which terms version a contributor
+  accepted. Contributors confirm they have the right to dedicate what they submit.
 
 ## 10. Deviations from the handoff
 
@@ -195,4 +198,5 @@ publication. (Reviewed means suitable for publication — never proven true.)*
 | Possibly Caddy | Existing nginx | nginx already owns :80/:443 for the fleet | docs/decisions/0002 |
 | Docker Compose default | PM2 + the house `deploy-site` (node kind) | Matches every other service here. Docker needs sudo. | docs/decisions/0002 |
 | Author field "assigned from credentials despite spoofing" | Spoofed author field is **rejected** (400) | Stricter: the client learns its payload was wrong instead of being silently corrected | docs/decisions/0003 |
+| Proposed CC BY 4.0 (content) and Apache-2.0 (code) | **CC0 1.0** (content) and **MIT** (code) | Randall's criterion: the least restrictive licenses possible | docs/decisions/0004 |
 | CLAUDE.md as the instruction file | AGENTS.md canonical; CLAUDE.md imports it; GEMINI.md symlinks to it | House convention, so all three agents read one file | — |
