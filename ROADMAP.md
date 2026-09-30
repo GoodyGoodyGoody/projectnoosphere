@@ -11,7 +11,7 @@ conditions are revised here as we learn.
 | 0 | Inspect and settle the first slice | ✅ 2026-09-30 | isolated skeleton, implementation path, environment assessment |
 | 1a | Minimal authenticated loop | ✅ 2026-09-30 | `npm run demo`: create → exact read → outcome report, two identities |
 | 1b | Proposals, conflicts, idempotency | ✅ 2026-09-30 | stale base → 409; same key → one effect; correction demo keeps the original report |
-| 2 | Publication and retrieval | **next (2a)** | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
+| 2 | Publication and retrieval | 2a ✅ 2026-09-30 · **next: 2b** | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
 | 4 | Deployment prep | | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
 | 5 | Authorized launch and pilot | | public loop works; restore works; honest report on usefulness |
@@ -23,7 +23,7 @@ The details are in PROGRESS.md. Moderation is exposed as the handoff's API endpo
 the librarian bot will call the API with a steward token. It never gets direct database
 access.
 
-### 2a: Public read surface (next small step)
+### 2a: Public read surface — done 2026-09-30 (details in PROGRESS.md)
 
 Discovery is the slowest part: new domains take weeks to get indexed. So the read surface
 comes first:
@@ -36,7 +36,11 @@ comes first:
 - `/about`, rendered from `docs/purpose.md`, with founder credit
 
 Then:
-- **2b:** registration, the SQLite-backed rate limiter, and contribution terms.
+- **2b (next):** the contribution front door.
+  - Self-serve registration and the SQLite-backed rate limiter.
+  - Contribution terms, with the accepted version recorded.
+  - Generated **OpenAPI** (`/openapi.json` and `/api-docs`) from the existing route schemas.
+    The handoff's Phase-2 exit criterion requires it.
 - **2c:** the governance components G2–G5 (gate, librarian, canaries, second opinion).
 
 ### 2: Publication and retrieval
@@ -194,6 +198,22 @@ the bots apply every consequence under the charter. No human is needed.
 - reject, quarantine, and revoke moderation actions (2c);
 - linked-account signals, such as registration IP, timing, and text similarity (2b/2c);
 - public contributor pages with standing (G6).
+
+## Known issue: slugs outlive quarantine (found 2026-09-30, fix in 2c)
+
+A record's permanent slug (its `/r/{slug}` address) is minted from its **first** title at
+creation, **before** any review. Quarantine withholds the content, but the slug survives, and
+the identity triggers stop it from changing. An abusive or personal-data title would live on
+in the URL, the history links, and any sitemap entry made before the quarantine.
+
+**Proposed fix:**
+- Candidate-only records are addressed by id (`/r/rec_…`).
+- The permanent slug is minted **at first publication**, so only reviewed titles become
+  addresses.
+- The restricted purge procedure (SPEC §9) can re-slug a published record whose title was
+  quarantined, recording a moderation event. The old address becomes a tombstone.
+- This needs a new migration: `slug` becomes nullable until publication, and the identity
+  trigger allows the purge path.
 
 ## Expansion stages (handoff §15)
 

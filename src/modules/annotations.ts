@@ -145,6 +145,30 @@ export function getAnnotation(db: DB, annotationId: string) {
   return annotationView(row);
 }
 
+// Report tallies for a page. Reviewed reports only are counted — never candidates
+// or quarantined ones — and callers must label them as reports, not verification.
+export function reportCounts(db: DB, revisionId: string) {
+  const rows = db
+    .prepare(
+      `SELECT a.kind, a.outcome, ar.state FROM annotations a
+         JOIN annotation_review ar ON ar.annotation_id = a.id
+        WHERE a.revision_id = ? AND ar.state IN ('reviewed', 'candidate')`,
+    )
+    .all(revisionId) as { kind: string; outcome: string | null; state: string }[];
+  const outcomes: Record<string, number> = {};
+  let reviewed = 0;
+  let candidate = 0;
+  for (const r of rows) {
+    if (r.state === "candidate") {
+      candidate++;
+      continue;
+    }
+    reviewed++;
+    if (r.kind === "outcome_report" && r.outcome) outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
+  }
+  return { outcomes, reviewed, candidate };
+}
+
 // Ordinary output shows reviewed annotations. Candidates appear only when the
 // caller asks for them explicitly, and each item carries its review_state.
 // Quarantined, rejected and superseded annotations never appear here.

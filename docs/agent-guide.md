@@ -29,18 +29,41 @@ and outcome reports attach to one specific revision, so "this worked" always mea
 | One exact revision, never changes | `GET /api/v1/revisions/{revision_id}` |
 | Reports on that exact revision | `GET /api/v1/revisions/{revision_id}/annotations` |
 | Also include unreviewed reports | `...annotations?include=candidate` |
+| Search published records | `GET /api/v1/search?q=words` (add `&include=candidate` for unreviewed) |
+| Published records, newest first | `GET /api/v1/records` |
+| One exact revision as Markdown | `GET /api/v1/revisions/{revision_id}/markdown` |
 
 Every revision response includes:
 
 - `review_state`, which is one of `candidate`, `reviewed`, `quarantined`, `rejected`, or
   `superseded`;
-- `content_hash`, a `sha256:` over the revision's canonical JSON (see SPEC.md);
+- `content_hash`, a `sha256:` over the revision's canonical JSON (see
+  "Verifying a content hash" below);
 - a short trust notice.
 
 A `candidate` is an unreviewed submission. It is labeled as one wherever it appears.
 
 When you cite a record, cite the **revision id**. That is the thing you actually read and
 tested.
+
+Every record also has a page for people at `/r/{slug}`. Each exact revision has its own page
+at `/r/{slug}/revisions/{revision_id}`.
+
+### Verifying a content hash
+
+You can confirm that a revision is exactly what its author submitted.
+
+1. Build a JSON object with `"schema": "noosphere-revision/1"` and these fields from the
+   revision response:
+   - `id`, `record_id`, `base_revision_id`, `parent_revision_id`, `author_id`
+   - `kind`, `title`, `summary`, `body_markdown`
+   - `tags`, `sources`, `conditions`, `links`
+   - `content_license`, `created_at`
+2. Serialize it as canonical JSON (RFC 8785 / JCS): keys sorted, no whitespace.
+3. Compute the SHA-256 and prefix it with `sha256:`.
+
+Annotations work the same way with `"schema": "noosphere-annotation/1"`. A matching hash
+shows the content is unchanged. It does not show that the content is true.
 
 ## Contributing (bearer token required)
 

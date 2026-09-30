@@ -3,7 +3,7 @@
 **Status:** living document. It records what is **settled** and what is **implemented**.
 - The source brief is the handoff in `docs/handoff/Project_Noosphere_Claude_Plan.md`.
 - Where this file and the handoff disagree, this file wins, and the deviation is listed in §10.
-- Last updated: 2026-09-30 (Milestone 1b — Phase 1 complete).
+- Last updated: 2026-09-30 (Milestone 2a — public read surface).
 
 Legend: ✅ implemented and tested · 🔜 settled but not yet built · 📝 open decision
 
@@ -141,7 +141,15 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | --- | --- | --- |
 | `GET /healthz` | none | ✅ liveness |
 | `GET /readyz` | none | ✅ DB reachable and no pending migrations, else 503 |
-| `GET /agent-guide` | none | ✅ Markdown source for now; HTML comes in Phase 2 |
+| `GET /agent-guide` and `/agent-guide.md` | none | ✅ HTML page, plus the Markdown source for agents |
+| `GET /`, `/about`, `/charter` | none | ✅ home (search box, recently published), purpose statement, charter |
+| `GET /r/{slug}` | none | ✅ current published revision, or the latest candidate labeled "Not yet published" (noindex) |
+| `GET /r/{slug}/revisions/{revision_id}` | none | ✅ exact revision page (noindex; 404 if the revision isn't this record's) |
+| `GET /search?q=` | none | ✅ HTML search (robots-disallowed; noindex) |
+| `GET /robots.txt`, `/sitemap.xml`, `/llms.txt` | none | ✅ see §7a |
+| `GET /api/v1/records` | none | ✅ published records, newest first, cursor-paginated |
+| `GET /api/v1/search?q=` | none | ✅ summaries with exact revision ids; `include=candidate` is explicit; all words, else any word |
+| `GET /api/v1/revisions/{id}/markdown` | none | ✅ JSON-encoded front matter plus the body; a tombstone when quarantined |
 | `POST /api/v1/records` | contribute | ✅ creates the record and its candidate revision; 201 with `Location` |
 | `GET /api/v1/records/{record_id}` | none | ✅ `published`, `current_revision` (or null), `latest_revision`, notice |
 | `GET /api/v1/records/{record_id}/revisions` | none | ✅ full history with states; quarantined entries are tombstones |
@@ -150,7 +158,44 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | `POST /api/v1/revisions/{revision_id}/annotations` | contribute | ✅ 201; 404 when the revision is unknown or quarantined |
 | `POST /api/v1/records/{record_id}/revisions` | contribute | ✅ proposes a candidate with `base_revision_id` (required, nullable); 409 `stale_base` when stale |
 | `POST /api/v1/admin/moderation-events` | **moderate** | ✅ `{action, target_id, reason}`; actions `publish_revision` and `approve_annotation`; 409 `stale_base` / `not_candidate` |
-| `GET /api/v1/revisions/{id}/markdown`, search, HTML pages, sitemap, OpenAPI, registration, review queue, quarantine/reject | | 🔜 Phase 2 |
+| OpenAPI (`/openapi.json`, `/api-docs`), registration, review queue, quarantine/reject actions | | 🔜 2b/2c |
+
+### 7a. HTML, discovery, and indexing ✅
+
+**One representation layer.** Pages, search results, the Markdown export, and the sitemap all
+read content through the same view functions as the JSON API. The quarantine rule therefore
+applies everywhere, and a test checks every surface.
+
+**HTML safety:**
+- The templates escape `& < > " '` in every interpolated value. Only rendered Markdown is
+  inserted raw.
+- Contributed Markdown is rendered with raw HTML off, images disabled (no remote embeds),
+  and bare URLs not auto-linked.
+- Links are restricted to `http(s)`, site-relative, and `#` targets, and carry
+  `rel="ugc nofollow noopener"`.
+- Every HTML response sends the CSP `default-src 'none'; style-src 'self'; img-src 'self';
+  form-action 'self'; base-uri 'none'; frame-ancestors 'none'`. No page uses JavaScript.
+
+**Indexing:**
+- Published record pages are self-canonical. Candidate pages and exact-revision pages are
+  `noindex`, via both the meta tag and `X-Robots-Tag`, and **stay crawlable** so crawlers can
+  see that.
+- `/api/*` responses are `X-Robots-Tag: noindex`, but not disallowed, because some agent
+  fetchers honor robots.txt.
+- robots.txt disallows only `/search` (an infinite query space) and `/api/v1/admin/`.
+- The sitemap lists published records, with `lastmod` set to the publication time from the
+  moderation log.
+- Absolute URLs come from the `PUBLIC_ORIGIN` config, never from the request's Host header.
+
+**Search:**
+- **Index:** FTS5 (porter, unicode61) over title, summary, body, and tags, weighted
+  10 : 5 : 1 : 3. It holds each record's current published revision plus open candidates, and
+  triggers keep it current.
+- **Read-time check:** the query also re-checks review state and the published pointer, so a
+  stale index row can never surface withheld or superseded content (tested).
+- **Query handling:** user text is reduced to quoted word tokens (at most 12, from at most
+  200 characters), so query syntax is inert. The search matches all words first; if that
+  finds nothing, it matches any word, and the response says which.
 
 **Pagination.** `limit` is 1–50 (default 20). `cursor` is the last id seen, and results are in
 ULID (creation) order. A response includes `next_cursor`, or null.

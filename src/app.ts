@@ -1,18 +1,20 @@
 import { Ajv, type ErrorObject } from "ajv";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
 import { pendingMigrations, schemaVersion, type DB } from "./db.ts";
 import { ApiError, invalid, type FieldError } from "./errors.ts";
 import { withIdempotency, type TestHooks, type WriteResult } from "./idempotency.ts";
+import { revisionMarkdown } from "./web/export.ts";
+import { errorPage, registerWebRoutes, sendHtml } from "./web/pages.ts";
 import { newId } from "./ids.ts";
 import { createAnnotation, getAnnotation, listAnnotations } from "./modules/annotations.ts";
 import { approveAnnotation, publishRevision } from "./modules/moderation.ts";
+import { search } from "./modules/search.ts";
 import {
   createRecord,
   getRecord,
   getRevision,
+  listPublished,
   listRevisions,
   proposeRevision,
   recordUrl,
@@ -27,6 +29,7 @@ import {
   params,
   proposalInputSchema,
   revisionInputSchema,
+  searchQuerySchema,
   type AnnotationInput,
   type ModerationInput,
   type ProposalInput,
@@ -44,14 +47,17 @@ export interface AppOptions {
   logger?: boolean | Record<string, unknown>;
   // SPDX id recorded on (and hashed into) every revision. ADR 0004.
   contentLicense?: string;
+  // Absolute origin for canonical links and the sitemap. Never derived from the
+  // request's Host header, which a client controls.
+  publicOrigin?: string;
   testHooks?: TestHooks;
 }
+
+export const DEFAULT_PUBLIC_ORIGIN = "https://projectnoosphere.org";
 
 // Contributed knowledge is dedicated to the public domain: the least restrictive
 // terms available, so any agent, person, mirror or dataset can reuse it freely.
 export const DEFAULT_CONTENT_LICENSE = "CC0-1.0";
-
-const AGENT_GUIDE = readFileSync(join(import.meta.dirname, "..", "docs", "agent-guide.md"), "utf8");
 
 // Two validators. Bodies are strict: no coercion, no silent removal of unknown
 // fields. Query strings and params arrive as text, so they need coercion.
@@ -78,8 +84,22 @@ function fieldMessage(err: ErrorObject): string {
   return err.message ?? "is invalid";
 }
 
+// Browsers get an HTML error page; the API, health checks and machine-readable
+// files keep the JSON error shape.
+function isHtmlPath(url: string): boolean {
+  const path = url.split("?")[0] ?? "";
+  if (path.startsWith("/api/") || path === "/healthz" || path === "/readyz") return false;
+  return !/\.[a-z0-9]+$/i.test(path);
+}
+
 function sendError(reply: FastifyReply, req: FastifyRequest, err: ApiError) {
   if (err.headers) reply.headers(err.headers);
+  if (isHtmlPath(req.url)) {
+    return sendHtml(reply, errorPage(err.status, err.status === 404 ? "There is nothing at this address." : err.message), {
+      status: err.status,
+      noindex: true,
+    });
+  }
   return reply.code(err.status).send({
     error: {
       code: err.code,
@@ -114,6 +134,9 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.addHook("onSend", async (req, reply) => {
     reply.header("x-request-id", req.id);
     reply.header("x-content-type-options", "nosniff");
+    // The API is for agents, not search results. Keep it crawlable (some agent
+    // fetchers honor robots.txt) but unindexed.
+    if (req.url.startsWith("/api/")) reply.header("x-robots-tag", "noindex");
   });
 
   app.setErrorHandler((err: Error & Record<string, unknown>, req, reply) => {
@@ -192,9 +215,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     }
   });
 
-  app.get("/agent-guide", async (_req, reply) =>
-    reply.type("text/markdown; charset=utf-8").send(AGENT_GUIDE),
-  );
+  registerWebRoutes(app, { db, publicOrigin: opts.publicOrigin ?? DEFAULT_PUBLIC_ORIGIN });
 
   // ---- records and revisions ------------------------------------------------
 
@@ -228,6 +249,33 @@ export function buildApp(opts: AppOptions): FastifyInstance {
       }),
   );
 
+  // Published records, newest first. Candidates are reached by explicit id.
+  app.get<{ Querystring: { limit: number; cursor?: string } }>(
+    "/api/v1/records",
+    { schema: { querystring: pageQuerySchema } },
+    async (req) => listPublished(db, req.query),
+  );
+
+  app.get<{ Querystring: { q: string; limit: number; offset: number; include?: "candidate" } }>(
+    "/api/v1/search",
+    { schema: { querystring: searchQuerySchema } },
+    async (req) => {
+      const res = search(db, req.query.q, {
+        limit: req.query.limit,
+        offset: req.query.offset,
+        includeCandidate: req.query.include === "candidate",
+      });
+      return {
+        ...res,
+        items: res.items.map((s) => ({
+          ...s,
+          html_url: s.is_current_published ? `/r/${s.record_slug}` : `/r/${s.record_slug}/revisions/${s.id}`,
+          api_url: revisionUrl(s.id),
+        })),
+      };
+    },
+  );
+
   app.get<{ Params: { record_id: string } }>(
     "/api/v1/records/:record_id",
     { schema: { params: params.record } },
@@ -244,6 +292,15 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     "/api/v1/revisions/:revision_id",
     { schema: { params: params.revision } },
     async (req) => getRevision(db, req.params.revision_id),
+  );
+
+  app.get<{ Params: { revision_id: string } }>(
+    "/api/v1/revisions/:revision_id/markdown",
+    { schema: { params: params.revision } },
+    async (req, reply) =>
+      reply
+        .type("text/markdown; charset=utf-8")
+        .send(revisionMarkdown(db, req.params.revision_id, opts.publicOrigin ?? DEFAULT_PUBLIC_ORIGIN)),
   );
 
   // ---- annotations ----------------------------------------------------------

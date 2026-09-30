@@ -280,7 +280,7 @@ export function revisionView(row: RevisionRow) {
   };
 }
 
-function revisionSummaryView(row: RevisionRow) {
+export function revisionSummaryView(row: RevisionRow) {
   const full = revisionView(row);
   if ("withheld" in full) return full;
   const { body_markdown: _b, sources: _s, links: _l, conditions: _c, ...summary } = full;
@@ -315,6 +315,62 @@ interface RecordRow {
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+// Summaries for a list of revision ids, in the given order, through the same
+// view (and quarantine rule) as every other representation.
+export function getRevisionSummaries(db: DB, ids: string[]) {
+  if (!ids.length) return [];
+  const rows = db
+    .prepare(`${REVISION_SELECT} WHERE v.id IN (SELECT value FROM json_each(?))`)
+    .all(JSON.stringify(ids)) as RevisionRow[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [revisionSummaryView(row)] : [];
+  });
+}
+
+// For the sitemap: slugs of records whose current revision is reviewed, with the
+// time that revision was published (from the moderation log — not updated_at,
+// which also moves when someone merely proposes a candidate). No content read.
+export function publishedForSitemap(db: DB, max = 50_000) {
+  return db
+    .prepare(
+      `SELECT r.slug,
+              (SELECT max(m.created_at) FROM moderation_events m
+                WHERE m.target_type = 'revision' AND m.target_id = r.current_revision_id
+                  AND m.action = 'publish_revision') AS published_at
+         FROM records r JOIN revision_review rr ON rr.revision_id = r.current_revision_id
+        WHERE rr.state = 'reviewed'
+        ORDER BY r.slug LIMIT ?`,
+    )
+    .all(max) as { slug: string; published_at: string | null }[];
+}
+
+export function recordIdBySlug(db: DB, slug: string): string {
+  const id = db.prepare("SELECT id FROM records WHERE slug = ?").pluck().get(slug) as string | undefined;
+  if (!id) throw notFound("record");
+  return id;
+}
+
+// Published records only — those whose current revision is reviewed — newest
+// revision first. Quarantined current revisions are simply not listed.
+export function listPublished(db: DB, page: { limit: number; cursor?: string }) {
+  const rows = db
+    .prepare(
+      `${REVISION_SELECT}
+        WHERE r.current_revision_id = v.id AND rr.state = 'reviewed'
+          AND (? = '' OR v.id < ?)
+        ORDER BY v.id DESC LIMIT ?`,
+    )
+    .all(page.cursor ?? "", page.cursor ?? "", page.limit + 1) as RevisionRow[];
+  const more = rows.length > page.limit;
+  const items = rows.slice(0, page.limit);
+  return {
+    items: items.map(revisionSummaryView),
+    next_cursor: more ? (items.at(-1)?.id ?? null) : null,
+  };
 }
 
 export function getRecord(db: DB, recordId: string) {

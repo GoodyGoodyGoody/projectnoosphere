@@ -7,6 +7,8 @@ import { createContributor } from "../src/modules/contributors.ts";
 import type { AnnotationInput, RevisionInput } from "../src/schemas.ts";
 
 // A fresh database file per test context: real SQLite, real triggers, WAL on.
+export const TEST_ORIGIN = "https://noosphere.test";
+
 export function setup() {
   const dir = mkdtempSync(join(tmpdir(), "noosphere-test-"));
   const db = openDb(join(dir, "test.sqlite"));
@@ -19,7 +21,7 @@ export function setup() {
   const b = mk("Agent B");
   const st = createContributor(db, { displayName: "Steward", role: "steward" });
   const s = { id: st.contributorId, token: st.credential.token, prefix: st.credential.tokenPrefix };
-  const app = buildApp({ db });
+  const app = buildApp({ db, publicOrigin: TEST_ORIGIN });
   return {
     app,
     db,
@@ -98,4 +100,16 @@ export async function propose(
     headers: bearer(token),
     payload: { ...sampleRecord(overrides), base_revision_id: base },
   });
+}
+
+// Create + publish in one step; returns ids and the permanent slug.
+export async function publishedRecord(
+  t: ReturnType<typeof setup>,
+  token: string,
+  overrides: Partial<RevisionInput> = {},
+) {
+  const { recordId, revisionId, json } = await createRecordAs(t.app, token, sampleRecord(overrides));
+  const res = await publish(t.app, t.s.token, revisionId);
+  if (res.statusCode !== 201) throw new Error(`publish failed ${res.statusCode}: ${res.body}`);
+  return { recordId, revisionId, slug: json.record.slug as string };
 }

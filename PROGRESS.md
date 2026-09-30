@@ -9,8 +9,15 @@ steward. Nothing is deployed, and no shared droplet infrastructure has been touc
 **Governance is settled** (ADR 0005): bots run review and humans observe. The charter
 (`docs/charter.md`) is v1, approved by Randall on 2026-09-30.
 
-**Next small step: 2a, the public read surface** (ROADMAP.md): HTML pages, safe Markdown,
-search, sitemap.
+**2a is complete.** People and agents can now browse, search, and read records:
+- no-JS pages for records and exact revisions;
+- safe Markdown;
+- full-text search;
+- sitemap, robots.txt, and llms.txt;
+- a Markdown export of each revision.
+
+**Next small step: 2b** (ROADMAP.md): self-serve registration, rate limits, contribution
+terms, OpenAPI.
 
 ---
 
@@ -181,3 +188,72 @@ then restored.
 - A candidate that loses a race stays `candidate` forever unless re-proposed. The librarian
   (2c) should mark such candidates `superseded`, with a reason.
 - Expired idempotency rows are pruned lazily, on the next stored write.
+
+## Milestone 2a — public read surface (2026-09-30)
+
+### What works
+- **Pages** (server-rendered, no JavaScript):
+  - home (search box, recently published), `/about` (purpose statement), `/charter`,
+    `/agent-guide`;
+  - `/r/{slug}`: the published record, or its latest candidate labeled "Not yet published"
+    and kept out of indexes;
+  - `/r/{slug}/revisions/{id}`: the exact revision, saying whether a newer one is current;
+  - each record page shows the trust notice, conditions, sources, tags, author, content
+    hash, reviewed reports (with counts labeled "reports, not verification"), history, and
+    links for agents.
+- **Search:**
+  - FTS5 over current published revisions plus open candidates, kept current by triggers and
+    re-checked at read time;
+  - `/api/v1/search` (JSON summaries with exact revision ids) and `/search` (HTML);
+  - all words first, then any word.
+- **Discovery:** `robots.txt` (disallows only `/search` and the admin API), `sitemap.xml`
+  (published records, with publication-time `lastmod`), `llms.txt`, and
+  `/api/v1/revisions/{id}/markdown`.
+- **Also:** `/api/v1/records` (a published listing), HTML 404 pages for browsers (the API
+  keeps JSON errors), readable UTC times, and a favicon.
+- **Visual check:** a real record page at desktop width and the home page at phone width,
+  rendered in headless Chromium against a seeded preview server on loopback. The preview was
+  shut down afterwards.
+
+### Checks performed
+- `npm run check` exits 0.
+- **60/60 tests** pass across 9 suites. The new suites cover web, discovery, and search.
+- They include one test that quarantines a *published* revision and asserts its content is
+  gone from every surface: the record page, the revision page, JSON, Markdown, both search
+  modes, the sitemap, the home page, and the listing.
+
+**Mutation checks** (each gate was shown red):
+
+| Mutation | Went red |
+| --- | --- |
+| HTML escaper returns its input unchanged | the escaping test |
+| Markdown `html: true` | the Markdown safety test |
+| Images re-enabled | the Markdown safety test |
+| Any link scheme allowed | the Markdown safety test |
+| Candidate page made indexable | the indexing test |
+| Search read-time state check removed | the stale-index test, **after a fix** (below) |
+| Pointer-move trigger disabled (`WHEN 0`) | the correction-swap test and the stale-index test |
+
+### Found by checking
+1. **Slugs outlive quarantine** (a real design issue, not yet fixed). A record's address is
+   minted from its first, unreviewed title, and survives quarantine. The fix is proposed in
+   ROADMAP ("Known issue: slugs").
+2. **The read-time check test didn't isolate it.** A quarantined row was *also* caught by the
+   view layer, so removing the SQL check stayed green. A case only the SQL check can catch
+   now covers it: a stale index row for an old revision that is still `reviewed`.
+3. **One of my mutations was faulty.** It renamed the trigger instead of disabling it, so it
+   proved nothing. It was redone as `WHEN 0`, which went red. A mutation that stays green
+   deserves a look at the mutation, too.
+4. **A test assumption was wrong.** "Old wording is gone" searched a word the correction
+   also contained, so the any-word fallback found it. The code was right; the test now uses
+   a word unique to the old version.
+5. **The server's migration guard fired correctly** during the preview, when the seed wrote
+   to the wrong file name.
+6. **The bm25 column weights count UNINDEXED columns.** This was verified empirically before
+   choosing the weights.
+
+### Unresolved / limitations
+- The slug issue (above).
+- There is no OpenAPI yet (2b).
+- The HTML trust notice mentions `/agent-guide` as text rather than a link.
+- Search has no highlighting or snippets. It shows summaries only, by design.

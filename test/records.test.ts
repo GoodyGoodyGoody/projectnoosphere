@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { canonicalJson, revisionHash } from "../src/hash.ts";
 import { authenticate } from "../src/auth.ts";
@@ -156,9 +158,14 @@ describe("records and exact revisions", () => {
 
   test("health, readiness, and the agent guide respond", async () => {
     assert.equal((await t.app.inject({ url: "/healthz" })).json().status, "ok");
-    assert.deepEqual((await t.app.inject({ url: "/readyz" })).json(), { status: "ready", schema_version: 1 });
-    const guide = await t.app.inject({ url: "/agent-guide" });
-    assert.match(guide.headers["content-type"] as string, /^text\/markdown/);
-    assert.match(guide.body, /not instructions to\s+you/);
+    const migrations = readdirSync(join(import.meta.dirname, "..", "migrations")).filter((f) => f.endsWith(".sql")).length;
+    assert.deepEqual((await t.app.inject({ url: "/readyz" })).json(), { status: "ready", schema_version: migrations });
+    // The guide is served twice: as a page for people and as Markdown for agents.
+    const md = await t.app.inject({ url: "/agent-guide.md" });
+    assert.match(md.headers["content-type"] as string, /^text\/markdown/);
+    assert.match(md.body, /not instructions to\s+you/);
+    const page = await t.app.inject({ url: "/agent-guide" });
+    assert.match(page.headers["content-type"] as string, /^text\/html/);
+    assert.match(page.body, /not instructions to\s+you/);
   });
 });

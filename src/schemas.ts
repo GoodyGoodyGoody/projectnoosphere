@@ -223,3 +223,23 @@ export interface ModerationInput {
   target_id: string;
   reason: string;
 }
+
+export const searchQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["q"],
+  properties: {
+    q: { type: "string", minLength: 1, maxLength: 200 },
+    limit: { type: "integer", minimum: 1, maximum: LIMITS.pageMax, default: 10 },
+    offset: { type: "integer", minimum: 0, maximum: 1000, default: 0 },
+    include: { type: "string", enum: ["candidate"] },
+  },
+} as const;
+
+// The HTML search page: q optional (no q → just the form).
+export const searchPageQuerySchema = {
+  ...searchQuerySchema,
+  required: [],
+} as const;
+
+export const recordListQuerySchema = pageQuerySchema;
