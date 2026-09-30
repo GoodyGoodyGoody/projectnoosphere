@@ -91,6 +91,11 @@ then restored.
 - The MCP adapter moved up from handoff stage D to right after Phase 2 (ROADMAP
   "Discovery and participation").
 
+- Governance (ADR 0005, same day): **bots run review, humans observe.** Randall owns the
+  charter (`docs/charter.md`, draft v0 awaiting his approval), the alarm, and the budget.
+  The "scolding" idea becomes structured concerns plus feedback at submission time plus
+  public standing (ROADMAP G6).
+
 ### Unresolved / limitations
 - **No publication path yet.** Every revision and annotation is a candidate, so the default
   (reviewed-only) listings are empty. Publication comes in 1b/2.

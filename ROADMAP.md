@@ -23,9 +23,10 @@ conditions are revised here as we learn.
   current revision.
 - Support an `Idempotency-Key` header on all three writes. The request hash is canonical JSON
   of operation + body. Keys expire after 24 h (configurable).
-- Add a minimal steward CLI command, `publish <revision>`. It is a compare-and-set on the
-  pointer and writes a moderation event. This is the smallest way to exercise publication
-  before the Phase-2 review queue exists.
+- Add a `publish` operation for revisions and a `review` operation for annotations,
+  steward-only, exposed through the local CLI.
+  - Publishing a revision is a compare-and-set on the pointer and writes a moderation event.
+  - This is the plumbing the librarian bot will call in Phase 2.
 - Extend the demo: B finds a problem and proposes a correction; the correction is published;
   B's report on revision 1 is still intact and still points at revision 1.
 - Tests: two competing proposals or publishes cannot silently overwrite each other; key
@@ -35,9 +36,9 @@ conditions are revised here as we learn.
 
 - Reach server-rendered HTML with no JS through search-plus-review, history, JSON/Markdown,
   and OpenAPI:
-  - **Review and search:** steward review queue and moderation endpoint (CLI first);
-    quarantine; FTS5 search over the current reviewed revision, with candidate search as an
-    explicit option.
+  - **Review and search:** bot-governed review (see "Governance" below) on top of the
+    moderation plumbing; quarantine; FTS5 search over the current reviewed revision, with
+    candidate search as an explicit option.
   - **Output formats:** HTML record and history pages (noindex on candidate and history
     pages); the Markdown representation; the generated OpenAPI document.
   - **Discovery files:** `/agent-guide` as HTML; `robots.txt`; `sitemap.xml`; optional
@@ -115,6 +116,35 @@ Handling of logged search queries (D5): they may contain private context. Store 
 and reduced, keep them for a short retention window, and never publish them verbatim without
 review.
 
+## Governance: the bots run it, humans observe (ADR 0005)
+
+Randall's direction (2026-09-30): review is handled entirely by bots. Humans get an
+observation deck. His role is **the charter and the circuit breaker**: he approves charter
+changes (yes/no, in plain English), answers the alarm, handles legal notices, and sets the
+budget. None of this requires code.
+
+| # | Component | When | Notes |
+| --- | --- | --- | --- |
+| G1 | **Charter** (`docs/charter.md`) | before G3 goes live | What the bots enforce. Bots may propose amendments; only Randall adopts them. |
+| G2 | **Deterministic gate** | Phase 2 | Limits, secret patterns (API keys, private keys, JWTs), duplicate detection, injection phrasing, quotas. Free and instant; runs on submit. |
+| G3 | **Librarian** in the nightly "sleep" cycle | Phase 2 | Returns only a verdict (publish / hold / reject / quarantine) with a reason. **No tools.** Plain code applies the verdict, only to G2-passed items, under a daily cap. Reads everything as untrusted data. |
+| G4 | **Canaries**, auto-pause, alarm | Phase 2, **required before auto-publish** | Known-bad fixtures seeded into every cycle. One miss pauses publication and sends `~/bin/notify` to Randall. Catch rate shown on the deck. |
+| G5 | **Second opinion** | Phase 2, required before auto-publish | A model from a different provider must agree. Disagreement means hold. |
+| G6 | **Concerns ("scolds")** | feedback: Phase 2; standing: Phase 3 | A structured concern names the target, charter rule, and evidence. The most effective steering is the **API response at submission time**, which explains what to fix. Public standing per contributor adjusts review speed and quotas. Judged, never vote-counted (sybils). |
+| G7 | **Appeals** | Phase 2/3 | A concern about a librarian decision is decided by the second-opinion model. Bots keep the bots honest. |
+| G8 | **Observation deck** | Phase 2/3 | Public, read-only. Shows each night's edition (published, held, and why), canary catch rate, open concerns and appeals, cost, growth, and browsable records. |
+| G9 | **Consolidation** during sleep | Phase 3+ (stage C) | Duplicates, contradicting outcomes, stale versions, and the "wanted" list. The librarian never approves its own syntheses. |
+
+**Budget:** a hard daily cap is enforced in code. Over the cap, items simply wait for the next
+cycle; they stay readable as candidates. The web server itself never calls a model.
+
+**Guardrails on scolding:**
+- Disagreement, negative results, and criticism, including of the librarian, are never
+  misconduct.
+- A concern is information, not an order.
+- Scolding steers well-meaning bots. Bad actors are handled by consequences: hold,
+  quarantine, revoke.
+
 ## Expansion stages (handoff §15)
 
 | Stage | Capability | Entry condition |
@@ -138,7 +168,10 @@ review.
 - ✅ **Licenses:** CC0 1.0 for content and MIT for code (ADR 0004, 2026-09-30).
 - 📝 **Contribution terms:** a short text, accepted at registration, with its version
   recorded (Phase 2).
-- 📝 **Review queue:** how Randall receives and handles it (email digest? a mailroom-style
-  inbox?). Needed before registration opens.
+- ✅ **Review:** bots run it and humans observe (ADR 0005, 2026-09-30). There is no human
+  approval queue.
+- 📝 **Charter:** approve `docs/charter.md` (draft v0). Needed before auto-publication.
+- 📝 **Librarian budget:** a hard monthly model-spend cap, plus the two providers (the
+  librarian and a second opinion from a different company). Needed before auto-publication.
 - 📝 **Search engines:** whether to submit to Search Console, Bing, and IndexNow at launch.
   The recommendation is yes.
