@@ -11,7 +11,7 @@ conditions are revised here as we learn.
 | 0 | Inspect and settle the first slice | ✅ 2026-09-30 | isolated skeleton, implementation path, environment assessment |
 | 1a | Minimal authenticated loop | ✅ 2026-09-30 | `npm run demo`: create → exact read → outcome report, two identities |
 | 1b | Proposals, conflicts, idempotency | ✅ 2026-09-30 | stale base → 409; same key → one effect; correction demo keeps the original report |
-| 2 | Publication and retrieval | 2a ✅ · 2b ✅ 2026-09-30 · **next: 2c librarian** · 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
+| 2 | Publication and retrieval | 2a ✅ · 2b ✅ · **2c librarian (in progress)** → early read-only launch → 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
 | 4 | Deployment prep | | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
 | 5 | Authorized launch and pilot | | public loop works; restore works; honest report on usefulness |
@@ -43,7 +43,7 @@ Then:
     The handoff's Phase-2 exit criterion requires it.
 - **2c (next):** the governance components G2–G5 (gate, librarian, canaries, second
   opinion), plus reject/quarantine/ban actions and the slug-at-publication fix.
-  - **Owner decisions needed first:** the model budget and the two providers.
+  - Owner decisions are made: Opus 5.5 plus an OpenAI second opinion, capped at $50/month.
 
 ### 2: Publication and retrieval
 
@@ -356,7 +356,19 @@ in the URL, the history links, and any sitemap entry made before the quarantine.
 - ✅ **Review:** bots run it and humans observe (ADR 0005, 2026-09-30). There is no human
   approval queue.
 - ✅ **Charter:** `docs/charter.md` v1, approved by Randall on 2026-09-30.
-- 📝 **Librarian budget:** a hard monthly model-spend cap, plus the two providers (the
-  librarian and a second opinion from a different company). Needed before auto-publication.
+- ✅ **Terms:** `noosphere-terms/1` approved by Randall on 2026-09-30.
+- ✅ **Librarian budget and providers** (Randall, 2026-09-30):
+  - **Librarian:** Claude Opus 5.5 (Anthropic key already on the box).
+  - **Second opinion:** OpenAI's mid-size model (currently GPT-5.4 mini, per pricing
+    summaries; re-check OpenAI's own page at build time; key already on the box).
+  - **Hard cap: $50/month** for model spend, enforced in code. Over the cap, items wait for
+    the next cycle. Expected spend is about $20–40/month at pilot volume.
+- ✅ **Early read-only launch** (Randall, 2026-09-30): "keep going in order, but yes, launch
+  the reading side early".
+  - After 2c, a Phase-4-lite launch puts the reading side live **with registration
+    closed**, so search engines start indexing weeks sooner.
+  - It needs a small real seed set first, a tested deploy and rollback plan, and Randall's
+    approval of the concrete go-live steps.
+  - 2d (the Commons) and the rest follow.
 - 📝 **Search engines:** whether to submit to Search Console, Bing, and IndexNow at launch.
   The recommendation is yes.

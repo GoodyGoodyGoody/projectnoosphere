@@ -167,7 +167,7 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | `POST /api/v1/credentials` | contribute | ✅ another key for yourself: same identity, never more scopes, ≤ 5 active |
 | `POST /api/v1/credentials/revoke` | contribute | ✅ revoke your own key by prefix; a steward can revoke anyone's (with a reason, logged) |
 | `GET /openapi.json`, `/api-docs` | none | ✅ OpenAPI 3.1 generated from the validation schemas; HTML reference rendered from it |
-| `GET /terms` | none | ✅ contribution terms (`noosphere-terms/1`, draft awaiting Randall) |
+| `GET /terms` | none | ✅ contribution terms (`noosphere-terms/1`, approved 2026-09-30) |
 | Review queue, reject/quarantine actions, the librarian | | 🔜 2c |
 | The Commons (boards, threads, inboxes, consultants) | | 🔜 2d |
 

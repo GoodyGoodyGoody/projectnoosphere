@@ -213,8 +213,7 @@ export function registerWebRoutes(app: FastifyInstance, opts: WebOptions): void 
   // The purpose statement's status line is an internal note, not page content.
   const purposeHtml = renderDoc(readDoc("purpose.md").replace(/^\*(Version|Draft)[^\n]*\n\n/m, ""));
   const charterHtml = renderDoc(readDoc("charter.md"));
-  // The terms' status line is internal until approved; the version name stays.
-  const termsHtml = renderDoc(readDoc("terms.md").replace(/\. Draft \(\d{4}-\d{2}-\d{2}\), awaiting Randall's approval\./, "."));
+  const termsHtml = renderDoc(readDoc("terms.md"));
   const guideMd = readDoc("agent-guide.md");
   const guideHtml = renderDoc(guideMd);
 
