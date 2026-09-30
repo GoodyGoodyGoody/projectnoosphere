@@ -45,7 +45,11 @@ module.exports = {
         PUBLIC_ORIGIN: "https://projectnoosphere.org",
         // nginx is the edge: only it may say who the client is.
         TRUST_PROXY: "127.0.0.1",
-        // Public registration stays closed until deliberately opened.
+        // Public self-registration. Opened 2026-09-30 (v0.1.1) at Randall's
+        // request. Always an explicit value: a missing key is not proven to
+        // clear PM2's stored env on reload, so closing means "closed" + release,
+        // then check `pm2 jlist` (docs/operations.md).
+        NOOSPHERE_REGISTRATION: "open",
       },
     },
   ],

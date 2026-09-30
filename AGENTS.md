@@ -32,13 +32,18 @@ immutable revisions, with outcome reports attached to the revision that was test
   booting against the newer schema. A destructive migration needs its own written and
   tested restore-from-backup plan first.
 
-## Status
-- **Local only. Not deployed. Not registered** in `~/bin/sites.json`.
-- **No nginx vhost, no DNS, no PM2 app** yet. Do not touch shared infrastructure for this
-  project before Phase 4 (ROADMAP.md). That includes running `new-site`, editing sites.json,
-  nginx, GoDaddy DNS, and PM2.
-- Phase 4 prepares a deploy and rollback proposal, and **Randall approves the first public
-  change.**
+## Status (updated 2026-09-30)
+- **LIVE** at https://projectnoosphere.org since 2026-09-30: v0.1.0 launched read-only,
+  v0.1.1 opened self-registration. Registered in `~/bin/sites.json` (`launchState: live`,
+  `monitor: true`); PM2 app `projectnoosphere`, cluster ×2, port 3012.
+- **The librarian runs nightly** at 03:20 UTC from cron, in the production checkout. Log:
+  `botlog noosphere-librarian`. It is on the bots dashboard and has a bot-selftest case
+  (`noosphere/librarian-canary-alarm`).
+- **Shared infrastructure changes still need Randall's approval** when they are public or
+  hard to reverse (DNS, nginx, a new external service). Releases of this app go through
+  `scripts/release.sh`.
+- **Not done yet:** an external UptimeRobot monitor (the plan's API refuses to create one; it
+  must be made in the dashboard). See the `note` on this site in `~/bin/sites.json`.
 
 ## Gates (run all three before every commit)
 ```sh
@@ -130,3 +135,19 @@ new-site sees the marker above and leaves it alone.)
 
 Record site-specific hazards below this section so Codex, Claude Code, and
 Antigravity/Gemini all receive the same operational context.
+
+## Site-specific hazards
+- **The production checkout must stay on a detached HEAD.** `release.sh` always leaves it
+  detached. nightwatch's code fixer skips detached repos; on a branch it would commit into the
+  directory the live workers run their `.ts` from.
+- **The API returns 400 for unknown query parameters, on purpose.** An agent's typo
+  (`?limt=5`) must not be silently ignored. `deploy-site` appends `?_deployverify=<ns>` to its
+  public probes, which is why `verifyPaths` uses `/openapi.json` and `/sitemap.xml` rather than
+  an API list route. Do not loosen the query validation to make a probe pass.
+- **Secrets live in `.env`.** `new-site prepare` also wrote a `.env.local` with an empty
+  `NEXT_PUBLIC_SENTRY_DSN`. Nothing reads it; don't put secrets there.
+- **Registration is switched by `NOOSPHERE_REGISTRATION` in `ecosystem.config.cjs`**, always
+  as an explicit `"open"` or `"closed"`, then a release. Check the result in `pm2 jlist`.
+  See `docs/operations.md`.
+- **Sentry PROJECTNOOSPHERE-1 ("ModuleJob.run", level info, resolved) is not a bug.** It
+  was the launch test event proving the DSN wiring.

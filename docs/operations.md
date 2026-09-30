@@ -1,8 +1,8 @@
 # Operations
 
-> **Status: pre-deployment.** Nothing here runs in production yet. Sections marked
-> *NOT YET* are Phase-4 deliverables (ROADMAP.md). They must be written **and tested**
-> before Randall is asked to approve the first public change.
+> **Status: LIVE since 2026-09-30** at https://projectnoosphere.org (v0.1.0 read-only
+> launch, then v0.1.1 opened registration). Sections marked *NOT YET* are still to come
+> (ROADMAP.md).
 
 ## Local development
 ```sh
@@ -44,9 +44,16 @@ restore-from-backup rollback first.
 - To read cron and bot logs use `~/bin/botlog`, never the raw files.
 
 ## Registration and limits
-- **Registration** is closed by default. Opening it is a deliberate act:
-  `NOOSPHERE_REGISTRATION=open` in the ecosystem file, then reload by file. Close it the same
-  way; existing keys keep working.
+- **Registration** is **open** since v0.1.1 (2026-09-30). The code defaults to closed; the
+  switch is `NOOSPHERE_REGISTRATION` in `ecosystem.config.cjs`.
+  - **To close it** (existing keys keep working): in the dev worktree set it to `"closed"`,
+    never delete the line (a missing key is not proven to clear PM2's stored env), commit,
+    tag, then `scripts/release.sh <tag>` in the production checkout. The release runs the
+    full check suite first, so allow a couple of minutes.
+  - **Then check both workers:**
+    `pm2 jlist | jq -r '.[] | select(.name=="projectnoosphere") | "\(.pm_id) \(.pm2_env.NOOSPHERE_REGISTRATION)"'`.
+    If `release.sh` ever undoes a release that changed this value, check it by hand: its
+    proof only checks the version.
 - **`TRUST_PROXY=127.0.0.1`** must be set behind nginx. Without it, every request looks like
   it comes from nginx's address, and the per-address limits lump every client together.
 - **Limits** live in the `rate_limits` table. They survive restarts and are shared by all
@@ -73,8 +80,21 @@ restore-from-backup rollback first.
   whether the rubric or a model changed.
 - **Spend ledger:** `librarian-spend.jsonl` in `SITE_DATA_DIR`, append-only, one line per
   model call.
-- **NOT YET:** the nightly cron entry (at launch; the crontab is shared infrastructure) and
-  the real-model run (2c part 3).
+- **Schedule:** nightly at 03:20 UTC from the crontab, in the production checkout, logging
+  to `~/logs/noosphere-librarian.log` (read it with `botlog noosphere-librarian`). The models
+  are Opus 5.5 and GPT-6 Sol, both at medium effort.
+- **Throughput:** up to 100 revisions and 100 annotations a night (the review-queue maximum).
+  The first run cost $0.18 for 12 items plus canaries. The write limits allow far more than
+  that per day, so under a sustained flood **the budget is the ceiling**: the $5 run cap
+  leaves the rest for the next night, and the $50 monthly cap stops review until the 1st.
+- **Alarms (`~/bin/notify`):**
+  - a canary would have been published: the run is discarded and the librarian pauses;
+  - the monthly cap is reached: sent once per month (marker file
+    `librarian-budget-alarm-YYYY-MM` in `SITE_DATA_DIR`). Randall decides: wait for the 1st,
+    or raise `LIBRARIAN_MONTHLY_CAP_USD` in the production `.env`.
+  - Apply errors do not email. They exit non-zero, and the bots dashboard flags the log.
+- **Proven weekly:** bot-selftest's `noosphere/librarian-canary-alarm` runs the canary test
+  in the production checkout.
 
 ## Credentials
 - **Issue:** `npm run cli -- contributor create --name … [--steward]`. The token is shown once.
@@ -87,8 +107,21 @@ restore-from-backup rollback first.
 - **Verify a backup:** `npm run restore-check -- <backup.sqlite> [--expect-revision rev_…]`.
   It works on a copy, and checks integrity, foreign keys, full migration, every
   revision's and annotation's content hash, review states, and pointers.
-- **At launch:** confirm the production path is swept (`data-backup.sh --list-roots`), then
-  run `restore-check` on the first real backup.
+- **Launch:** the production path is swept (confirmed 2026-09-30 with
+  `data-backup.sh --list-roots`). Still to do: run `restore-check` on the first real backup
+  (the backup runs daily at 09:40 UTC).
+
+## Monitoring
+- **On-box:** `~/bin/uptime-monitor.sh` probes `/readyz` every 5 minutes (from `sites.json`,
+  `monitor: true`) and emails on down and recovery.
+- **External:** UptimeRobot is *pending*. This account's API refuses to create monitors, so
+  one has to be made in the dashboard (HTTP, `https://projectnoosphere.org/readyz`, 5 min).
+  After that, set `externalMonitor` to `"uptimerobot"` in `sites.json`.
+- **Errors:** Sentry project `projectnoosphere` (org lifeguardfindercom).
+- **Dashboards:** bots.randallmills.com lists the app and the librarian job, with spend.
+  nightwatch reports uncommitted or unpushed work in both checkouts.
+- **Search:** Google Search Console property `sc-domain:projectnoosphere.org`, verified by
+  DNS TXT; `gsc-bot` resubmits the sitemap weekly.
 
 ## Incidents: *NOT YET* (Phase 2 adds quarantine)
 - **Malicious contribution:** quarantine the revision or annotation, with a moderation event

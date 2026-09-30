@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { pickCanaries, type Canary } from "./canaries.ts";
 import type { NoosphereClient } from "./client.ts";
 import { buildUserMessage, SYSTEM_PROMPT } from "./prompt.ts";
@@ -54,6 +55,8 @@ export interface CycleReport {
   applied: Record<string, number>;
   applyErrors: string[];
   stoppedByBudget: boolean;
+  // The MONTHLY cap stopped this run (a per-run stop just continues tomorrow).
+  monthlyCapReached: boolean;
   unverified: boolean;
   canaries: { name: string; expect: string; decision: VerdictValue }[];
   canaryFailure: boolean;
@@ -102,7 +105,7 @@ export async function runCycle(o: CycleOptions): Promise<CycleReport> {
   const now = o.now?.() ?? new Date();
   const month = now.toISOString().slice(0, 7);
   const report: CycleReport = {
-    reviewed: 0, superseded: 0, applied: {}, applyErrors: [], stoppedByBudget: false, unverified: false,
+    reviewed: 0, superseded: 0, applied: {}, applyErrors: [], stoppedByBudget: false, monthlyCapReached: false, unverified: false,
     canaries: [], canaryFailure: false, spendRunUsd: 0, spendMonthUsd: o.ledger.monthTotal(month),
   };
 
@@ -125,8 +128,10 @@ export async function runCycle(o: CycleOptions): Promise<CycleReport> {
   for (const item of work) {
     const input: ReviewInput = { kind: item.kind, system: SYSTEM_PROMPT, user: buildUserMessage(item.kind, item.payload) };
     const worst = o.primary.maxCostUsd(input) + o.second.maxCostUsd(input);
-    if (report.spendMonthUsd + report.spendRunUsd + worst > o.monthlyCapUsd || report.spendRunUsd + worst > o.runCapUsd) {
+    const overMonth = report.spendMonthUsd + report.spendRunUsd + worst > o.monthlyCapUsd;
+    if (overMonth || report.spendRunUsd + worst > o.runCapUsd) {
       report.stoppedByBudget = true;
+      report.monthlyCapReached = overMonth;
       break;
     }
     const opinions = await Promise.all([safeReview(o.primary, input), safeReview(o.second, input)]);
@@ -141,6 +146,24 @@ export async function runCycle(o: CycleOptions): Promise<CycleReport> {
     decided.push({ ...item, decision: combine(opinions[0]!, opinions[1]!), opinions });
   }
   report.spendMonthUsd += report.spendRunUsd;
+
+  // A per-run stop is routine: the rest waits for tomorrow night. The monthly
+  // cap is different — nothing is reviewed until the 1st, silently, unless we
+  // say so. It is Randall's budget, so it is his question. Once per month (a
+  // marker beside the pause file), not every night until the 1st.
+  if (report.monthlyCapReached) {
+    const marker = join(dirname(o.pauseFile), `librarian-budget-alarm-${month}`);
+    if (!existsSync(marker)) {
+      writeFileSync(marker, `${now.toISOString()}\n`, { mode: 0o600 });
+      o.notify(
+        `Noosphere librarian: the ${month} review budget is used up`,
+        `The librarian has spent $${report.spendMonthUsd.toFixed(2)} of its $${o.monthlyCapUsd} monthly cap, so it has stopped reviewing until the 1st.\n` +
+          `New submissions wait as unreviewed candidates until then (visible by direct link, labeled, not indexed).\n\n` +
+          `Your choice: do nothing and it resumes on the 1st, or ask an agent to raise LIBRARIAN_MONTHLY_CAP_USD in the production .env.\n` +
+          `This email is sent once per month.`,
+      );
+    }
+  }
 
   // ---- the canary check, before anything is applied ----
   const canaryResults = decided.filter((d) => d.canary);

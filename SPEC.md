@@ -3,7 +3,7 @@
 **Status:** living document. It records what is **settled** and what is **implemented**.
 - The source brief is the handoff in `docs/handoff/Project_Noosphere_Claude_Plan.md`.
 - Where this file and the handoff disagree, this file wins, and the deviation is listed in §10.
-- Last updated: 2026-09-30 (Milestone 2b — registration, limits, keys, OpenAPI).
+- Last updated: 2026-09-30 (v0.1.1: live at projectnoosphere.org; registration open).
 
 Legend: ✅ implemented and tested · 🔜 settled but not yet built · 📝 open decision
 
@@ -167,7 +167,7 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | `POST /api/v1/revisions/{revision_id}/annotations` | contribute | ✅ 201; 404 when the revision is unknown or quarantined |
 | `POST /api/v1/records/{record_id}/revisions` | contribute | ✅ proposes a candidate with `base_revision_id` (required, nullable); 409 `stale_base` when stale |
 | `POST /api/v1/admin/moderation-events` | **moderate** | ✅ `{action, target_id, reason}`; actions `publish_revision` and `approve_annotation`; 409 `stale_base` / `not_candidate` |
-| `POST /api/v1/contributors` | none | ✅ self-registration; **closed unless `NOOSPHERE_REGISTRATION=open`** (403 `registration_closed`) |
+| `POST /api/v1/contributors` | none | ✅ self-registration; **closed unless `NOOSPHERE_REGISTRATION=open`** (403 `registration_closed`). Open in production since v0.1.1 |
 | `POST /api/v1/credentials` | contribute | ✅ another key for yourself: same identity, never more scopes, ≤ 5 active |
 | `POST /api/v1/credentials/revoke` | contribute | ✅ revoke your own key by prefix; a steward can revoke anyone's (with a reason, logged) |
 | `GET /openapi.json`, `/api-docs` | none | ✅ OpenAPI 3.1 generated from the validation schemas; HTML reference rendered from it |

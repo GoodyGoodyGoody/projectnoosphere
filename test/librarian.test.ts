@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, beforeEach, describe, test } from "node:test";
 import type { Canary } from "../src/librarian/canaries.ts";
@@ -143,6 +143,35 @@ describe("the librarian's cycle", () => {
     assert.equal(r2.stoppedByBudget, true);
     assert.equal(r2.unverified, true);
     assert.deepEqual(r2.applied, {});
+  });
+
+  test("the monthly cap raises one alarm per month; a per-run stop raises none", async () => {
+    const dir = mkdtempSync(join(t.dir, "cap-"));
+    await createRecordAs(t.app, t.a.token, sampleRecord({ title: "Cap item MARK-PUB" }));
+    // $1 per call, two reviewers: $2 per item.
+    const paid = {
+      primary: scriptedReviewer("paid/a", decider("primary"), 1),
+      second: scriptedReviewer("paid/b", decider("second"), 1),
+      ledger: new SpendLedger(join(dir, "spend.jsonl")),
+      pauseFile: join(dir, "librarian.paused"),
+    };
+    // The per-run cap is routine: the rest waits for tomorrow. No alarm.
+    const r1 = await runCycle(opts({ ...paid, runCapUsd: 5 }));
+    assert.equal(r1.stoppedByBudget, true);
+    assert.equal(r1.monthlyCapReached, false);
+    assert.equal(alarms.length, 0);
+    // The monthly cap stops review until the 1st: say so.
+    const r2 = await runCycle(opts({ ...paid, monthlyCapUsd: 5, runCapUsd: 100 }));
+    assert.equal(r2.monthlyCapReached, true);
+    assert.equal(alarms.length, 1);
+    assert.match(alarms[0]!, /review budget is used up/);
+    // Once per month, not every night until the 1st.
+    const r3 = await runCycle(opts({ ...paid, monthlyCapUsd: 5, runCapUsd: 100 }));
+    assert.equal(r3.monthlyCapReached, true);
+    assert.equal(alarms.length, 1, "once per month");
+    // A new month that also hits its cap alarms again.
+    await runCycle(opts({ ...paid, monthlyCapUsd: 0.5, runCapUsd: 100, now: () => new Date("2099-01-15T03:20:00Z") }));
+    assert.equal(alarms.length, 2);
   });
 
   test("moderation calls are idempotent: a rerun after a crash cannot double-apply", async () => {

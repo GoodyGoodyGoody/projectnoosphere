@@ -550,3 +550,70 @@ PM2 apps, each removed afterwards (see Found #1).
      real command.
 
    Neither made it into the seed content.
+
+## Launch: v0.1.0 read-only, then v0.1.1 registration open (2026-09-30)
+
+Randall approved `docs/launch.md` and asked to open registration too. The launch list ran
+in order. Its outcome, with every deviation from the plan, is at the top of `docs/launch.md`.
+
+**Live:**
+- https://projectnoosphere.org serves release v0.1.0 (`14b29f379896`): PM2 cluster ×2 on
+  :3012, TLS valid to 2026-12-29, DNS A @ → 209.97.151.200.
+- The 12 seed how-tos are **published by the librarian**, not by hand. The first real run
+  reviewed 12, published 12, and quarantined both bad canaries while publishing the good
+  one; cost $0.18.
+- **Wired up:**
+  - Sentry (test event received, then resolved);
+  - the nightly cron at 03:20 UTC;
+  - the bots dashboard, with prices for both models;
+  - a bot-selftest case that proves the canary alarm fires;
+  - nightwatch watching the dev worktree;
+  - the on-box uptime monitor;
+  - a verified Google Search Console property. Google fetched the 18-URL sitemap the same
+    day.
+- **Measured:**
+  - memory 2 × 78 MB PSS;
+  - every reload probed at 100 ms with 0 failed requests (112 and 123 probes);
+  - `site-conformance` 16/16;
+  - an off-box fetch renders the home page.
+
+**Found by checking, and fixed (shared tools in `~/bin` and `~/code/bots`):**
+1. **`new-site doctor --ready` had three checks that could never pass, for any site:**
+   - **DNS:** a doubled backslash made awk see `{print \<domain>}`. This has been broken
+     since 2026-08-13; mailroom fails it too.
+   - **TLS:** it tested a root-only path. It now asks nginx for the certificate it serves,
+     with a hostname match and a validity check.
+   - **Sentry DSN:** it read only `.env.local`.
+
+   Each was proven both ways. `finalize` could not get past them.
+2. **`deploy-site`'s public cache-buster (`?_deployverify=…`) gets the API's deliberate
+   400** for unknown query parameters. `verifyPaths` now uses `/openapi.json` and
+   `/sitemap.xml`. The API stays strict.
+3. **The bots dashboard showed one row per cluster worker.** It now shows one row per app,
+   and any worker that is down marks the app down; tested and mutation-checked.
+   - The librarian's JSON report tripped the dashboard's error scan: `"applyErrors": []`
+     and `"canaryFailure": false` both matched it. They are now ignored exactly. A real
+     apply error or a tripped canary still counts (tested).
+4. **`finalize` and `uptimerobot-sync` rewrote every em dash in `sites.json` as `—`**
+   (Python's `json.dump` default). Both now write UTF-8.
+5. **`gsc-bot --site` overwrote the dashboard's fleet-wide Search Console table** with a
+   one-site table. Metrics now come from full sweeps only, written atomically. The table
+   was restored.
+6. **UptimeRobot:** this plan's API refuses `newMonitor` even with only type, URL and name.
+   It must be created in the dashboard, so it is pending, and `doctor --complete` shows
+   that one item.
+
+**v0.1.1 (the registration release):**
+- `NOOSPHERE_REGISTRATION: "open"`, as an explicit value, so a rollback cannot leave a
+  stale key in PM2.
+- **Librarian throughput:** the nightly batch went from 50 to 100 per kind (the endpoint
+  maximum). At 50, one contributor at the 200-writes-a-day limit would outrun review
+  forever. Now a sustained flood reaches the monthly budget first.
+- **New alarm:** reaching the **monthly** cap emails once per month. It used to stop review
+  silently until the 1st. A per-run stop stays quiet. Mutation-checked three ways: no alarm,
+  an alarm every night, an alarm on a per-run stop.
+- **Docs:**
+  - the AGENTS.md status and site hazards;
+  - operations (registration switch, librarian schedule and alarms, monitoring);
+  - the agent guide (registration open; review happens nightly).
+- **Gates:** `npm run check`, 103 tests plus the demo, all passing.

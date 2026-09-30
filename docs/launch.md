@@ -1,6 +1,35 @@
 # Launch plan: early read-only launch
 
-**Status: PROPOSED. Nothing below has been done.** This is the list Randall approves.
+**Status: DONE 2026-09-30.** Randall approved it; every step ran, in order. Then v0.1.1
+opened registration, which is also the first real production run of `release.sh`.
+
+**Where the run differed from the plan:**
+- **Step 6:** the Sentry test event is titled "ModuleJob.run" (it was sent from an inline
+  script). It arrived, then was resolved.
+- **Step 7:** all 12 seeds were published; canaries passed; cost $0.18.
+- **Step 8:** the bots dashboard listed the two cluster workers as two rows. Fixed in bots
+  (one row per app). The first run's usage predates the new prices, so the dashboard shows it
+  as $0.
+- **Step 9:**
+  - `new-site doctor --ready` had three checks that could never pass for any site: DNS (an
+    awk quoting bug), TLS (a root-only path), and the Sentry DSN (it read only `.env.local`).
+    All fixed in `~/bin`.
+  - `verifyPaths` swapped `/api/v1/records` for `/openapi.json` and `/sitemap.xml`:
+    `deploy-site`'s cache-buster parameter gets the API's deliberate 400.
+  - Every reload was probed at 100 ms with zero failed requests.
+  - **UptimeRobot:** this account's API refuses to create monitors, so one must be made in
+    the dashboard. That is still pending.
+- **Step 10:**
+  - `gsc-bot --site` added and DNS-verified the Search Console property; Google fetched the
+    18-URL sitemap the same day.
+  - It also overwrote the dashboard's fleet table. Fixed in `~/bin`, and the table was
+    restored with a full sweep.
+- **Afterwards:**
+  - memory is about 156 MB for both workers (PSS);
+  - an off-box fetch renders the site;
+  - conformance is 16/16.
+
+The plan as approved follows.
 
 **What goes live:**
 - The reading side of projectnoosphere.org, over HTTPS.

@@ -39,6 +39,7 @@ const PAUSE_FILE = join(DATA_DIR, "librarian.paused");
 const LEDGER = new SpendLedger(join(DATA_DIR, "librarian-spend.jsonl"));
 const MONTHLY_CAP = Number(process.env.LIBRARIAN_MONTHLY_CAP_USD ?? 50); // Randall's cap, 2026-09-30
 const RUN_CAP = Number(process.env.LIBRARIAN_RUN_CAP_USD ?? 5);
+const QUEUE_LIMIT = 100; // the review-queue endpoint's maximum (schemas.ts), per kind
 
 function notify(subject: string, body: string): void {
   const bin = process.env.NOTIFY_BIN ?? "/home/randall/bin/notify";
@@ -78,6 +79,10 @@ if (cmd === "status") {
       second: openaiReviewer({ model: "gpt-6-sol", reasoningEffort: "medium", maxTokens: 4000, apiKey: openaiKey }),
       rubricVersion: RUBRIC_VERSION,
       ledger: LEDGER, monthlyCapUsd: MONTHLY_CAP, runCapUsd: RUN_CAP, pauseFile: PAUSE_FILE, notify,
+      // The queue endpoint's maximum, per kind. At the default 50, one busy
+      // contributor (200 writes/day) outran the librarian forever; at 100 + 100
+      // a sustained flood reaches the MONTHLY cap first, which alarms.
+      limit: QUEUE_LIMIT,
       // Model ids as the bots dashboard's price table names them.
       onUsage: (reviewer, inTok, outTok) => reportUsage("noosphere-librarian", reviewer.replace(/^[a-z]+\//, ""), inTok, outTok),
     });
@@ -99,6 +104,7 @@ if (cmd === "status") {
     second: scriptedReviewer("dry-run/second", hold),
     rubricVersion: RUBRIC_VERSION,
     ledger: LEDGER, monthlyCapUsd: MONTHLY_CAP, runCapUsd: RUN_CAP, pauseFile: PAUSE_FILE, notify,
+    limit: QUEUE_LIMIT,
   });
   console.log(JSON.stringify(report, null, 2));
 } else {

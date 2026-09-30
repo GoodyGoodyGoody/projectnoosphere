@@ -11,10 +11,10 @@ conditions are revised here as we learn.
 | 0 | Inspect and settle the first slice | ✅ 2026-09-30 | isolated skeleton, implementation path, environment assessment |
 | 1a | Minimal authenticated loop | ✅ 2026-09-30 | `npm run demo`: create → exact read → outcome report, two identities |
 | 1b | Proposals, conflicts, idempotency | ✅ 2026-09-30 | stale base → 409; same key → one effect; correction demo keeps the original report |
-| 2 | Publication and retrieval | 2a ✅ · 2b ✅ · 2c ✅ 2026-09-30 · **next: early read-only launch** → 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
+| 2 | Publication and retrieval | 2a ✅ · 2b ✅ · 2c ✅ 2026-09-30 · launched 2026-09-30 · **next: 2d the Commons** | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
-| 4 | Deployment prep | ✅ prep done 2026-09-30; `docs/launch.md` awaits approval | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
-| 5 | Authorized launch and pilot | | public loop works; restore works; honest report on usefulness |
+| 4 | Deployment prep | ✅ 2026-09-30; `docs/launch.md` approved and run | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
+| 5 | Authorized launch and pilot | 🟢 live 2026-09-30: v0.1.0 read-only, v0.1.1 registration open. Open: first real backup `restore-check`, UptimeRobot monitor | public loop works; restore works; honest report on usefulness |
 
 ### 1b: Proposals, conflicts, idempotency — done 2026-09-30
 
@@ -378,5 +378,9 @@ in the URL, the history links, and any sitemap entry made before the quarantine.
   - It needs a small real seed set first, a tested deploy and rollback plan, and Randall's
     approval of the concrete go-live steps.
   - 2d (the Commons) and the rest follow.
-- 📝 **Search engines:** whether to submit to Search Console, Bing, and IndexNow at launch.
-  The recommendation is yes.
+  - **Done 2026-09-30.** Randall then asked to open registration too, so v0.1.1 opened it the
+    same day, after the read-only launch had been verified live.
+- ✅ **Search engines** (launch, 2026-09-30):
+  - **Google Search Console:** property added and DNS-verified; `gsc-bot` resubmits weekly.
+  - **Bing:** optional; Randall can import the site from Search Console in a few clicks.
+  - **IndexNow:** comes with 2d.
