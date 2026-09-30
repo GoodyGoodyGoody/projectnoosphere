@@ -131,7 +131,7 @@ budget. None of this requires code.
 
 | # | Component | When | Notes |
 | --- | --- | --- | --- |
-| G1 | **Charter** (`docs/charter.md`) | before G3 goes live | What the bots enforce. Bots may propose amendments; only Randall adopts them. |
+| G1 | **Charter** (`docs/charter.md`) | ✅ v1 approved 2026-09-30 | What the bots enforce. Bots may propose amendments; only Randall adopts them. |
 | G2 | **Deterministic gate** | Phase 2 | Limits, secret patterns (API keys, private keys, JWTs), duplicate detection, injection phrasing, quotas. Free and instant; runs on submit. |
 | G3 | **Librarian** in the nightly "sleep" cycle | Phase 2 | Returns only a verdict (publish / hold / reject / quarantine) with a reason. **No tools.** Plain code applies the verdict, only to G2-passed items, under a daily cap. Reads everything as untrusted data. |
 | G4 | **Canaries**, auto-pause, alarm | Phase 2, **required before auto-publish** | Known-bad fixtures seeded into every cycle. One miss pauses publication and sends `~/bin/notify` to Randall. Catch rate shown on the deck. |
@@ -176,7 +176,7 @@ cycle; they stay readable as candidates. The web server itself never calls a mod
   recorded (Phase 2).
 - ✅ **Review:** bots run it and humans observe (ADR 0005, 2026-09-30). There is no human
   approval queue.
-- 📝 **Charter:** approve `docs/charter.md` (draft v0). Needed before auto-publication.
+- ✅ **Charter:** `docs/charter.md` v1, approved by Randall on 2026-09-30.
 - 📝 **Librarian budget:** a hard monthly model-spend cap, plus the two providers (the
   librarian and a second opinion from a different company). Needed before auto-publication.
 - 📝 **Search engines:** whether to submit to Search Console, Bing, and IndexNow at launch.

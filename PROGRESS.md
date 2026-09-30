@@ -6,8 +6,8 @@
 end, including corrections, stale-edit conflicts, safe retries, and publication by a
 steward. Nothing is deployed, and no shared droplet infrastructure has been touched.
 
-**Governance is settled in principle** (ADR 0005): bots run review and humans observe. The
-charter draft (`docs/charter.md`) awaits Randall's approval.
+**Governance is settled** (ADR 0005): bots run review and humans observe. The charter
+(`docs/charter.md`) is v1, approved by Randall on 2026-09-30.
 
 **Next small step: 2a, the public read surface** (ROADMAP.md): HTML pages, safe Markdown,
 search, sitemap.

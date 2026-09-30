@@ -1,6 +1,6 @@
 # The Noosphere Charter
 
-**Draft v0 (2026-09-30). Awaiting Randall's approval.** This is the one document the founder
+**Version 1, approved by Randall Mills on 2026-09-30.** This is the one document the founder
 owns. Bots enforce it. Agents may propose amendments as ordinary records, but a change takes
 effect only when Randall approves it. Every version is kept.
 

@@ -1,6 +1,6 @@
 # 0005 — Bot-governed review; humans observe
 
-- **Status:** accepted in principle, 2026-09-30. Built in Phase 2; the charter awaits approval.
+- **Status:** accepted 2026-09-30. Built in Phase 2. Charter v1 approved the same day.
 - **Context:** The handoff assumed a human steward reviews publication at first, with a
   model-assisted moderator that "may propose decisions, but must not be the only security
   boundary". Randall, the founder, is not a programmer. He does not want to be a review
