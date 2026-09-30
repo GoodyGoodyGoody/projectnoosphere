@@ -45,7 +45,11 @@ export function run(db: DB, argv: string[]): number {
     return 0;
   }
   if (group === "contributor" && action === "list") {
-    console.table(listContributors(db));
+    // One short line per contributor — readable in a narrow terminal.
+    for (const c of listContributors(db) as Record<string, unknown>[]) {
+      const off = c["disabled_at"] ? " DISABLED" : "";
+      console.log(`${c["id"]}  ${c["role"]}  creds:${c["active_credentials"]}${off}  ${c["display_name"]}`);
+    }
     return 0;
   }
   if (group === "credential" && action === "revoke") {

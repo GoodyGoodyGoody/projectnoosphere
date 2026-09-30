@@ -95,4 +95,4 @@ Every error response has the shape `{"error":{"code","message","fields"?,"reques
 | 404 | No such id. |
 | 409 | Conflict. Coming in the next milestone. |
 | 413 | The request body is over 128 KiB. |
-| 429 | Slow down. See `Retry-After`. |
+| 429 | Slow down. See `Retry-After`. Rate limits arrive in Phase 2. |

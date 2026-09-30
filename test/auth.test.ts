@@ -57,7 +57,12 @@ describe("authentication and authorization", () => {
 
   test("a contributor cannot be issued the steward-only 'moderate' scope", () => {
     assert.throws(() => issueCredential(t.db, t.a.id, { scopes: ["moderate"] }), /elevation refused/);
-    // …and the database refuses it even if application code were bypassed.
+    // …and the database refuses it even if application code were bypassed —
+    // on INSERT, and on an UPDATE that tries to widen an existing credential.
+    assert.throws(
+      () => t.db.prepare(`UPDATE credentials SET scopes = '["contribute","moderate"]' WHERE contributor_id = ?`).run(t.a.id),
+      /can only be revoked/,
+    );
     assert.throws(
       () => t.db.prepare(
         `INSERT INTO credentials (id, contributor_id, token_prefix, secret_hash, scopes, created_at)
