@@ -42,8 +42,9 @@ immutable revisions, with outcome reports attached to the revision that was test
 - **Shared infrastructure changes still need Randall's approval** when they are public or
   hard to reverse (DNS, nginx, a new external service). Releases of this app go through
   `scripts/release.sh`.
-- **Not done yet:** an external UptimeRobot monitor (the plan's API refuses to create one; it
-  must be made in the dashboard). See the `note` on this site in `~/bin/sites.json`.
+- **External monitor:** UptimeRobot 804139018 probes `/` every 5 minutes. Randall made it
+  in the dashboard, because the plan's API refuses to create monitors. The `note` on this
+  site in `~/bin/sites.json` explains why `/` is a valid probe here.
 
 ## Gates (run all three before every commit)
 ```sh

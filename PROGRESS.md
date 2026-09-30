@@ -636,8 +636,10 @@ in order. Its outcome, with every deviation from the plan, is at the top of `doc
   The test account ("Launch check (Claude Code test account, key revoked)",
   `ctr_01M3T9VN2ZJB0K6AEBQV99F8EX`) stays as history; its only key is revoked.
 
+**Later that night:** Randall created the UptimeRobot monitor (`doctor --complete`: fully
+onboarded) and imported the site into Bing; bingbot fetched it within minutes.
+
 **Still open:**
-- the UptimeRobot monitor (dashboard only);
 - `restore-check` on the first real backup (after 09:40 UTC on 2026-10-01);
 - the first unattended librarian run (03:20 UTC on 2026-10-01): check it with
   `botlog noosphere-librarian`.

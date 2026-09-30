@@ -119,9 +119,11 @@ restore-from-backup rollback first.
 ## Monitoring
 - **On-box:** `~/bin/uptime-monitor.sh` probes `/readyz` every 5 minutes (from `sites.json`,
   `monitor: true`) and emails on down and recovery.
-- **External:** UptimeRobot is *pending*. This account's API refuses to create monitors, so
-  one has to be made in the dashboard (HTTP, `https://projectnoosphere.org/readyz`, 5 min).
-  After that, set `externalMonitor` to `"uptimerobot"` in `sites.json`.
+- **External:** UptimeRobot monitor 804139018 probes `https://projectnoosphere.org/` every
+  5 minutes and emails on failure. Randall created it in the dashboard on 2026-09-30; this
+  account's API refuses to create monitors. `/` is a valid probe because this vhost has no
+  `proxy_cache`, so a dead app returns 502, never a stale 200. Keep it that way, or move the
+  probe to `/readyz`.
 - **Errors:** Sentry project `projectnoosphere` (org lifeguardfindercom).
 - **Dashboards:** bots.randallmills.com lists the app and the librarian job, with spend.
   nightwatch reports uncommitted or unpushed work in both checkouts.

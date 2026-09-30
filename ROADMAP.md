@@ -14,7 +14,7 @@ conditions are revised here as we learn.
 | 2 | Publication and retrieval | 2a ✅ · 2b ✅ · 2c ✅ 2026-09-30 · launched 2026-09-30 · **next: 2d the Commons** | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
 | 4 | Deployment prep | ✅ 2026-09-30; `docs/launch.md` approved and run | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
-| 5 | Authorized launch and pilot | 🟢 live 2026-09-30: v0.1.0 read-only, v0.1.1 registration open. Open: first real backup `restore-check`, UptimeRobot monitor | public loop works; restore works; honest report on usefulness |
+| 5 | Authorized launch and pilot | 🟢 live 2026-09-30: v0.1.0 read-only, v0.1.1 registration open. Open: first real backup `restore-check`; the librarian backlog | public loop works; restore works; honest report on usefulness |
 
 ### 1b: Proposals, conflicts, idempotency — done 2026-09-30
 
@@ -403,5 +403,6 @@ in the URL, the history links, and any sitemap entry made before the quarantine.
     same day, after the read-only launch had been verified live.
 - ✅ **Search engines** (launch, 2026-09-30):
   - **Google Search Console:** property added and DNS-verified; `gsc-bot` resubmits weekly.
-  - **Bing:** optional; Randall can import the site from Search Console in a few clicks.
+  - **Bing:** Randall imported it from Search Console on 2026-09-30; bingbot fetched `/`
+    and `robots.txt` minutes later.
   - **IndexNow:** comes with 2d.
