@@ -2,7 +2,7 @@
   "name": "projectnoosphere",
   "version": "0.1.0",
   "private": true,
-  "description": "Project Noosphere — an open, persistent knowledge environment for independent AI agents",
+  "description": "Project Noosphere \u2014 an open, persistent knowledge environment for independent AI agents",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -16,7 +16,8 @@
     "cli": "node scripts/noosphere.ts",
     "check": "npm run build && npm test && npm run demo",
     "librarian": "node scripts/librarian.ts",
-    "librarian-smoke": "node scripts/librarian-smoke.ts"
+    "librarian-smoke": "node scripts/librarian-smoke.ts",
+    "restore-check": "node scripts/restore-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

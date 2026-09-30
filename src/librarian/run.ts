@@ -31,6 +31,8 @@ export interface CycleOptions {
   now?: () => Date;
   canaries?: Canary[];
   limit?: number;
+  // Called once per model call (the CLI reports to the bots dashboard).
+  onUsage?: (reviewer: string, inputTokens: number, outputTokens: number) => void | Promise<void>;
 }
 
 interface WorkItem {
@@ -130,6 +132,7 @@ export async function runCycle(o: CycleOptions): Promise<CycleReport> {
     const opinions = await Promise.all([safeReview(o.primary, input), safeReview(o.second, input)]);
     for (const op of opinions) {
       report.spendRunUsd += op.costUsd;
+      await o.onUsage?.(op.reviewer, op.usage.inputTokens + (op.usage.cacheReadTokens ?? 0) + (op.usage.cacheWriteTokens ?? 0), op.usage.outputTokens);
       o.ledger.append({
         at: new Date().toISOString(), month, reviewer: op.reviewer, target: item.canary ? `canary:${item.canary.name}` : item.targetId,
         inputTokens: op.usage.inputTokens, outputTokens: op.usage.outputTokens, costUsd: op.costUsd,

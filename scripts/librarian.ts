@@ -14,6 +14,7 @@ import { scriptedReviewer } from "../src/librarian/fake.ts";
 import { anthropicReviewer, openaiReviewer } from "../src/librarian/providers.ts";
 import { RUBRIC_VERSION } from "../src/librarian/prompt.ts";
 import { runCycle } from "../src/librarian/run.ts";
+import { reportUsage } from "../src/librarian/usage-report.ts";
 import { SpendLedger } from "../src/librarian/spend.ts";
 
 // Provider keys (and, for cron, SITE_DATA_DIR) live in this repo's .env
@@ -77,6 +78,8 @@ if (cmd === "status") {
       second: openaiReviewer({ model: "gpt-6-sol", reasoningEffort: "medium", maxTokens: 4000, apiKey: openaiKey }),
       rubricVersion: RUBRIC_VERSION,
       ledger: LEDGER, monthlyCapUsd: MONTHLY_CAP, runCapUsd: RUN_CAP, pauseFile: PAUSE_FILE, notify,
+      // Model ids as the bots dashboard's price table names them.
+      onUsage: (reviewer, inTok, outTok) => reportUsage("noosphere-librarian", reviewer.replace(/^[a-z]+\//, ""), inTok, outTok),
     });
     console.log(JSON.stringify(report, null, 2));
     process.exit(report.canaryFailure || report.applyErrors.length ? 1 : 0);
