@@ -4,11 +4,20 @@ import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
 import { pendingMigrations, schemaVersion, type DB } from "./db.ts";
 import { ApiError, invalid, type FieldError } from "./errors.ts";
 import { withIdempotency, type TestHooks, type WriteResult } from "./idempotency.ts";
+import { consume, DEFAULT_LIMITS, ipHash, type LimitConfig } from "./limits.ts";
+import {
+  activeCredentialCount,
+  createContributor,
+  credentialOwner,
+  issueCredential,
+  MAX_ACTIVE_CREDENTIALS,
+  revokeCredential,
+} from "./modules/contributors.ts";
 import { revisionMarkdown } from "./web/export.ts";
 import { errorPage, registerWebRoutes, sendHtml } from "./web/pages.ts";
 import { newId } from "./ids.ts";
 import { createAnnotation, getAnnotation, listAnnotations } from "./modules/annotations.ts";
-import { approveAnnotation, publishRevision } from "./modules/moderation.ts";
+import { approveAnnotation, publishRevision, revokeCredentialAsSteward } from "./modules/moderation.ts";
 import { search } from "./modules/search.ts";
 import {
   createRecord,
@@ -28,9 +37,15 @@ import {
   pageQuerySchema,
   params,
   proposalInputSchema,
+  credentialIssueSchema,
+  credentialRevokeSchema,
+  registrationSchema,
+  RESERVED_NAME,
   revisionInputSchema,
   searchQuerySchema,
+  TERMS_VERSION,
   type AnnotationInput,
+  type RegistrationInput,
   type ModerationInput,
   type ProposalInput,
   type RevisionInput,
@@ -50,6 +65,13 @@ export interface AppOptions {
   // Absolute origin for canonical links and the sitemap. Never derived from the
   // request's Host header, which a client controls.
   publicOrigin?: string;
+  // Public self-registration. Closed unless deliberately opened (handoff: keep
+  // it closed on public hosts until the checks pass).
+  registration?: "open" | "closed";
+  limits?: Partial<LimitConfig>;
+  // Which peer may set X-Forwarded-For. In production: the local nginx only
+  // ("127.0.0.1"). Never true — that would let any client choose its own IP.
+  trustProxy?: false | string;
   testHooks?: TestHooks;
 }
 
@@ -120,8 +142,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     bodyLimit: LIMITS.bodyBytes,
     genReqId: () => newId("req"),
     requestIdHeader: false,
-    // Phase 4 sets this to the local nginx only; never trust a client-supplied X-Forwarded-For.
-    trustProxy: false,
+    trustProxy: opts.trustProxy ?? false,
     return503OnClosing: true,
   });
 
@@ -173,10 +194,24 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   // Runs in onRequest — before the body is parsed or validated — so an
   // unauthenticated write is a 401 and learns nothing about the schema.
+  const limits: LimitConfig = { ...DEFAULT_LIMITS, ...opts.limits };
+  const registrationOpen = (opts.registration ?? "closed") === "open";
+
+  // Every authenticated route is a write. Stewards (the librarian) are exempt
+  // from write quotas; everyone else is limited per contributor, per client
+  // address, and globally — checked before the body is even parsed.
   const authed = (scope: Scope) => async (req: FastifyRequest) => {
     const actor = authenticate(db, req.headers.authorization);
     requireScope(actor, scope);
     req.actor = actor;
+    if (actor.scopes.includes("moderate")) return;
+    const ip = ipHash(db, req.ip);
+    consume(db, [
+      { name: "writes per contributor per hour", bucket: `w:ctr:${actor.contributorId}:h`, limit: limits.writesPerContributorPerHour, windowSec: 3600 },
+      { name: "writes per contributor per day", bucket: `w:ctr:${actor.contributorId}:d`, limit: limits.writesPerContributorPerDay, windowSec: 86400 },
+      { name: "writes per client address per hour", bucket: `w:ip:${ip}:h`, limit: limits.writesPerIpPerHour, windowSec: 3600 },
+      { name: "writes site-wide per day", bucket: "w:global:d", limit: limits.writesGlobalPerDay, windowSec: 86400 },
+    ]);
   };
   const actorOf = (req: FastifyRequest): Actor => {
     if (!req.actor) throw new Error("route reached without authentication");
@@ -327,6 +362,103 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         ...(req.query.cursor ? { cursor: req.query.cursor } : {}),
         includeCandidate: req.query.include === "candidate",
       }),
+  );
+
+  // ---- registration and credentials -----------------------------------------
+  // The one unauthenticated write. It can only ever create an ordinary
+  // contributor. The token is returned once, never stored, never logged, and —
+  // unlike other writes — never kept by idempotency (that would store it).
+
+  app.post<{ Body: RegistrationInput }>(
+    "/api/v1/contributors",
+    {
+      schema: { body: registrationSchema },
+      onRequest: async () => {
+        if (!registrationOpen) {
+          throw new ApiError(403, "registration_closed", "public registration is not open yet");
+        }
+      },
+      // After validation, so a malformed request doesn't burn a sign-up slot.
+      preHandler: async (req) => {
+        const ip = ipHash(db, req.ip);
+        consume(db, [
+          { name: "sign-ups per client address per hour", bucket: `r:ip:${ip}:h`, limit: limits.registrationPerIpPerHour, windowSec: 3600 },
+          { name: "sign-ups per client address per day", bucket: `r:ip:${ip}:d`, limit: limits.registrationPerIpPerDay, windowSec: 86400 },
+          { name: "sign-ups site-wide per day", bucket: "r:global:d", limit: limits.registrationGlobalPerDay, windowSec: 86400 },
+        ]);
+      },
+    },
+    async (req, reply) => {
+      const name = req.body.display_name;
+      if (name.trim() !== name) throw invalid("display_name", "no leading or trailing spaces");
+      if (RESERVED_NAME.test(name)) {
+        throw invalid("display_name", "names that could pass as the site's own bots or staff are reserved");
+      }
+      const created = createContributor(db, {
+        displayName: name,
+        ...(req.body.client_info ? { clientInfo: req.body.client_info as Record<string, string> } : {}),
+        registration: { termsVersion: TERMS_VERSION, ipHash: ipHash(db, req.ip) },
+      });
+      const row = db.prepare("SELECT created_at FROM contributors WHERE id = ?").pluck().get(created.contributorId);
+      return reply.code(201).header("cache-control", "no-store").send({
+        contributor: {
+          id: created.contributorId,
+          display_name: name,
+          role: created.role,
+          terms_version: TERMS_VERSION,
+          created_at: row,
+        },
+        credential: { id: created.credential.credentialId, token_prefix: created.credential.tokenPrefix, scopes: ["contribute"] },
+        token: created.credential.token,
+        notice:
+          "Store this token now: it is shown once and cannot be recovered. Send it as " +
+          "'Authorization: Bearer <token>'. Never put it in a URL or in a contribution. " +
+          "New contributors start with low write limits; everything you submit is reviewed before publication.",
+      });
+    },
+  );
+
+  // A replacement or additional credential for yourself: same identity, never
+  // more scopes than the credential you present.
+  app.post<{ Body: { label?: string; scopes?: Scope[] } }>(
+    "/api/v1/credentials",
+    { schema: { body: credentialIssueSchema }, onRequest: authed("contribute") },
+    async (req, reply) => {
+      const actor = actorOf(req);
+      const scopes = req.body.scopes ?? actor.scopes;
+      const excess = scopes.filter((s) => !actor.scopes.includes(s));
+      if (excess.length) throw invalid("scopes", "cannot exceed the scopes of the credential you present");
+      if (activeCredentialCount(db, actor.contributorId) >= MAX_ACTIVE_CREDENTIALS) {
+        throw new ApiError(409, "too_many_credentials", `at most ${MAX_ACTIVE_CREDENTIALS} active credentials; revoke one first`);
+      }
+      const issued = issueCredential(db, actor.contributorId, { scopes, ...(req.body.label ? { label: req.body.label } : {}) });
+      return reply.code(201).header("cache-control", "no-store").send({
+        credential: { id: issued.credentialId, token_prefix: issued.tokenPrefix, scopes },
+        token: issued.token,
+        notice: "Store this token now: it is shown once and cannot be recovered.",
+      });
+    },
+  );
+
+  // Revoke your own credential by its public prefix. A steward may revoke
+  // anyone's (the ban path), with a reason, as a logged moderation event.
+  // Someone else's prefix looks exactly like an unknown one: 404.
+  app.post<{ Body: { token_prefix: string; reason?: string } }>(
+    "/api/v1/credentials/revoke",
+    { schema: { body: credentialRevokeSchema }, onRequest: authed("contribute") },
+    async (req) => {
+      const actor = actorOf(req);
+      const owner = credentialOwner(db, req.body.token_prefix);
+      if (owner === actor.contributorId) {
+        if (!revokeCredential(db, req.body.token_prefix)) throw new ApiError(409, "already_revoked", "this credential is already revoked");
+        return { revoked: req.body.token_prefix };
+      }
+      if (owner && actor.scopes.includes("moderate")) {
+        if (!req.body.reason) throw invalid("reason", "a steward revoking another contributor's credential must give a reason");
+        return { event: revokeCredentialAsSteward(db, actor, req.body.token_prefix, req.body.reason) };
+      }
+      throw new ApiError(404, "not_found", "credential not found");
+    },
   );
 
   // ---- moderation (steward scope: 'moderate') ------------------------------

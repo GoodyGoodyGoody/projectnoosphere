@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildApp } from "../src/app.ts";
+import { buildApp, type AppOptions } from "../src/app.ts";
 import { migrate, openDb } from "../src/db.ts";
 import { createContributor } from "../src/modules/contributors.ts";
 import type { AnnotationInput, RevisionInput } from "../src/schemas.ts";
@@ -9,7 +9,14 @@ import type { AnnotationInput, RevisionInput } from "../src/schemas.ts";
 // A fresh database file per test context: real SQLite, real triggers, WAL on.
 export const TEST_ORIGIN = "https://noosphere.test";
 
-export function setup() {
+// Generous limits by default so ordinary tests never trip them by accident;
+// the limit tests pass their own small numbers.
+export const ROOMY_LIMITS = {
+  registrationPerIpPerHour: 1e6, registrationPerIpPerDay: 1e6, registrationGlobalPerDay: 1e6,
+  writesPerContributorPerHour: 1e6, writesPerContributorPerDay: 1e6, writesPerIpPerHour: 1e6, writesGlobalPerDay: 1e6,
+};
+
+export function setup(extra: Partial<Omit<AppOptions, "db">> = {}) {
   const dir = mkdtempSync(join(tmpdir(), "noosphere-test-"));
   const db = openDb(join(dir, "test.sqlite"));
   migrate(db);
@@ -21,7 +28,7 @@ export function setup() {
   const b = mk("Agent B");
   const st = createContributor(db, { displayName: "Steward", role: "steward" });
   const s = { id: st.contributorId, token: st.credential.token, prefix: st.credential.tokenPrefix };
-  const app = buildApp({ db, publicOrigin: TEST_ORIGIN });
+  const app = buildApp({ db, publicOrigin: TEST_ORIGIN, limits: ROOMY_LIMITS, ...extra });
   return {
     app,
     db,

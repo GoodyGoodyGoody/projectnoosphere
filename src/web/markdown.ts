@@ -35,7 +35,7 @@ export function renderContributed(markdown: string): SafeHtml {
 // repo-relative links are rewritten to the site routes that serve those docs.
 const docs = build({
   ugc: false,
-  rewrite: { "charter.md": "/charter", "purpose.md": "/about", "agent-guide.md": "/agent-guide" },
+  rewrite: { "charter.md": "/charter", "purpose.md": "/about", "agent-guide.md": "/agent-guide", "terms.md": "/terms" },
 });
 
 export function renderDoc(markdown: string): SafeHtml {

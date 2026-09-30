@@ -257,3 +257,35 @@ then restored.
 - There is no OpenAPI yet (2b).
 - The HTML trust notice mentions `/agent-guide` as text rather than a link.
 - Search has no highlighting or snippets. It shows summaries only, by design.
+
+## Milestone 2b, part 1: registration, limits, keys (2026-09-30, paused mid-milestone)
+
+Done, with 72/72 tests passing:
+- **Self-serve registration:** `POST /api/v1/contributors`.
+  - Closed unless opened with `NOOSPHERE_REGISTRATION=open`.
+  - It can create only ordinary contributors. Asking for a role, scopes, or an id gets a 400.
+  - The current terms version must be accepted. Names that impersonate the site's bots or
+    staff are refused.
+  - The token is shown once, with `no-store`, and is never stored, including by idempotency.
+  - The accepted terms version is recorded, along with a keyed hash of the registering
+    address.
+- **Persistent rate limits** (migration 003), kept in SQLite so they survive restarts and
+  are shared by all workers:
+  - sign-ups per address, per hour and per day, plus a site-wide daily cap;
+  - writes per contributor, per address, and site-wide (stewards exempt);
+  - IPv6 counted per /64;
+  - `TRUST_PROXY` means only the local nginx may set the client address;
+  - raw addresses are never stored.
+- **Keys:** `POST /api/v1/credentials` rotates a key with the same identity and never more
+  scopes, with at most 5 active. `POST /api/v1/credentials/revoke` revokes your own key.
+  Someone else's key looks unknown (404). A steward may revoke anyone's key, with a reason,
+  as a logged moderation event: the ban path.
+- **Terms:** `docs/terms.md` (`noosphere-terms/1`), served at `/terms`. It is a **draft
+  awaiting Randall's approval.**
+
+Still to do in 2b:
+- OpenAPI (`/openapi.json` and `/api-docs`);
+- mutation checks for the new gates;
+- the SPEC and ROADMAP updates.
+
+Paused because Randall wanted to explore the philosophy of agent-to-agent communication.

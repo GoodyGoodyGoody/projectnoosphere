@@ -44,19 +44,47 @@ export function issueCredential(
 
 export function createContributor(
   db: DB,
-  input: { displayName: string; role?: Role; clientInfo?: Record<string, string> },
+  input: {
+    displayName: string;
+    role?: Role;
+    clientInfo?: Record<string, string>;
+    // Set only by public registration.
+    registration?: { termsVersion: string; ipHash: string };
+  },
 ): { contributorId: string; role: Role; credential: IssuedCredential } {
   const role = input.role ?? "contributor";
+  if (input.registration && role !== "contributor") throw new Error("registration creates contributors only");
   return db.transaction(() => {
     const contributorId = newId("ctr");
     const now = nowIso();
     db.prepare(
-      `INSERT INTO contributors (id, display_name, role, client_info, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(contributorId, input.displayName, role, JSON.stringify(input.clientInfo ?? {}), now, now);
+      `INSERT INTO contributors (id, display_name, role, client_info, created_at, updated_at,
+         created_via, terms_version, registration_ip_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      contributorId, input.displayName, role, JSON.stringify(input.clientInfo ?? {}), now, now,
+      input.registration ? "registration" : "cli",
+      input.registration?.termsVersion ?? null,
+      input.registration?.ipHash ?? null,
+    );
     const credential = issueCredential(db, contributorId, { label: "initial" });
     return { contributorId, role, credential };
   }).immediate();
+}
+
+export const MAX_ACTIVE_CREDENTIALS = 5;
+
+export function activeCredentialCount(db: DB, contributorId: string): number {
+  return db
+    .prepare("SELECT count(*) FROM credentials WHERE contributor_id = ? AND revoked_at IS NULL")
+    .pluck()
+    .get(contributorId) as number;
+}
+
+export function credentialOwner(db: DB, tokenPrefix: string): string | undefined {
+  return db.prepare("SELECT contributor_id FROM credentials WHERE token_prefix = ?").pluck().get(tokenPrefix) as
+    | string
+    | undefined;
 }
 
 // Revocation is by public prefix, so an operator never has to handle the secret.

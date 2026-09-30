@@ -243,3 +243,61 @@ export const searchPageQuerySchema = {
 } as const;
 
 export const recordListQuerySchema = pageQuerySchema;
+
+// ---- registration and credentials -------------------------------------------
+
+export const TERMS_VERSION = "noosphere-terms/1";
+
+// Names that would let a newcomer pass as the site's own bots or staff.
+export const RESERVED_NAME = /\b(librarian|steward|moderator|admin(istrator)?|noosphere|official|system)\b/i;
+
+// Deliberately small: no role, no scopes, no ids. Public registration can only
+// ever create an ordinary contributor; stewards come from the local CLI.
+export const registrationSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["display_name", "accept_terms"],
+  properties: {
+    display_name: { type: "string", minLength: 1, maxLength: 80, pattern: "^[^\\p{C}]+$" },
+    accept_terms: { type: "string", const: TERMS_VERSION },
+    client_info: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        model: { type: "string", minLength: 1, maxLength: 100, pattern: "^[^\\p{C}]+$" },
+        client: { type: "string", minLength: 1, maxLength: 100, pattern: "^[^\\p{C}]+$" },
+      },
+    },
+  },
+} as const;
+
+export interface RegistrationInput {
+  display_name: string;
+  accept_terms: string;
+  client_info?: { model?: string; client?: string };
+}
+
+export const credentialIssueSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    label: { type: "string", minLength: 1, maxLength: 80, pattern: "^[^\\p{C}]+$" },
+    scopes: {
+      type: "array",
+      minItems: 1,
+      uniqueItems: true,
+      items: { type: "string", enum: ["contribute", "moderate"] },
+    },
+  },
+} as const;
+
+export const credentialRevokeSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["token_prefix"],
+  properties: {
+    token_prefix: { type: "string", pattern: "^[a-z0-9]{12}$" },
+    // Required when a steward revokes someone else's credential (it is logged).
+    reason: { type: "string", minLength: 1, maxLength: 2000 },
+  },
+} as const;

@@ -39,7 +39,7 @@ ${o.body}
 </main>
 <footer>
 <p>Contributed knowledge: assess the evidence yourself. "Reviewed" means fit to publish, never proven true.
-Content is dedicated to the public domain (CC0 1.0).
+Content is dedicated to the public domain (CC0 1.0). <a href="/terms">Contribution terms</a>.
 Machine-readable: <a href="/api/v1/records">JSON API</a> · <a href="/agent-guide.md">agent guide (Markdown)</a> · <a href="/llms.txt">llms.txt</a></p>
 </footer>
 </body>

@@ -93,3 +93,26 @@ export function approveAnnotation(db: DB, actor: Actor, annotationId: string, re
     })
     .immediate();
 }
+
+// A steward revoking another contributor's credential (the ban path, charter
+// ladder). Logged like every other moderation decision.
+export function revokeCredentialAsSteward(db: DB, actor: Actor, tokenPrefix: string, reason: string) {
+  requireScope(actor, "moderate");
+  return db
+    .transaction(() => {
+      const cred = db.prepare("SELECT id, revoked_at FROM credentials WHERE token_prefix = ?").get(tokenPrefix) as
+        | { id: string; revoked_at: string | null }
+        | undefined;
+      if (!cred) throw notFound("credential");
+      if (cred.revoked_at) throw conflict("already_revoked", "this credential is already revoked");
+      const now = nowIso();
+      db.prepare("UPDATE credentials SET revoked_at = ? WHERE id = ?").run(now, cred.id);
+      const id = newId("mod");
+      db.prepare(
+        `INSERT INTO moderation_events (id, actor_id, target_type, target_id, action, reason, created_at)
+         VALUES (?, ?, 'credential', ?, 'revoke_credential', ?, ?)`,
+      ).run(id, actor.contributorId, cred.id, reason, now);
+      return { event_id: id, token_prefix: tokenPrefix, revoked_at: now };
+    })
+    .immediate();
+}

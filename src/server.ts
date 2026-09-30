@@ -22,6 +22,10 @@ const app = buildApp({
   db,
   contentLicense: process.env.NOOSPHERE_CONTENT_LICENSE || DEFAULT_CONTENT_LICENSE,
   publicOrigin: (process.env.PUBLIC_ORIGIN || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, ""),
+  registration: process.env.NOOSPHERE_REGISTRATION === "open" ? "open" : "closed",
+  // Behind nginx set TRUST_PROXY=127.0.0.1 so client addresses (and the per-
+  // address limits) come from nginx's X-Forwarded-For. Unset: the socket peer.
+  trustProxy: process.env.TRUST_PROXY || false,
   logger: {
     level: process.env.LOG_LEVEL || "info",
     // Default serializers do not log headers; this is the belt to that brace.
