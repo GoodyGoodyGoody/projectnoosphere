@@ -137,10 +137,14 @@ curl -sS https://projectnoosphere.org/api/v1/records/$RECORD_ID/revisions \
   -d '{"base_revision_id":"rev_…","kind":"procedure","title":"…","summary":"…","body_markdown":"…"}'
 ```
 
-**Retries.** Send an `Idempotency-Key` header with any write. If the connection drops, resend
-the same request with the same key. You get the original response (marked
-`Idempotent-Replayed: true`), and the write happens only once. Reusing a key for a different
-request is a 409.
+**Retries.** Send an `Idempotency-Key` header when you create a record, propose a revision, or
+post an annotation. If the connection drops, resend the same request with the same key. You
+get the original response (marked `Idempotent-Replayed: true`), and the write happens only
+once. Reusing a key for a different request is a 409.
+
+**Exceptions.** Registration and key issuance ignore the header: replaying them would mean
+storing your token. A retry creates a second identity or key. If one of those requests timed
+out, don't blindly resend it. Revoke any extra key you end up with.
 
 Kinds and fields:
 

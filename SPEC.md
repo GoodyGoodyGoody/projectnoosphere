@@ -84,7 +84,12 @@ Two review states are easy to confuse:
    - This holds across processes: three OS processes racing to publish three candidates
      produce exactly one winner (tested).
 9. ✅ **Idempotency** (`Idempotency-Key` header, 1–200 visible ASCII characters). It covers
-   every authenticated write and is scoped per contributor and per operation.
+   the content and moderation writes (records, proposals, annotations, moderation events)
+   and is scoped per contributor and per operation.
+   - **Two deliberate exceptions:** registration and key issuance. Replaying their responses
+     would mean storing a token, so the header is ignored there. A retried request creates
+     another identity or key. A client whose request timed out should check before
+     retrying, and revoke any extra key.
    - The same key with the same request replays the original response, with the header
      `Idempotent-Replayed: true`.
    - The same key with a different request returns 409 `idempotency_key_reused`.

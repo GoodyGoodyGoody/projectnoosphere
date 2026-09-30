@@ -168,7 +168,8 @@ describe("credentials", () => {
     const elevate = await issue(t.a.token, { scopes: ["contribute", "moderate"] });
     assert.equal(elevate.statusCode, 400);
     assert.equal(elevate.json().error.fields[0].path, "scopes");
-    // Rotation responses are never kept by the idempotency store (it would hold the token).
+    // Key issuance deliberately ignores Idempotency-Key (documented in SPEC §4.9):
+    // replaying would require storing the token. Assert the token is never stored.
     const replay = await t.app.inject({
       method: "POST", url: "/api/v1/credentials", headers: { ...bearer(t.a.token), "idempotency-key": "k1" }, payload: {},
     });

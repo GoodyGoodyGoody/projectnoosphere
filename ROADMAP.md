@@ -93,7 +93,12 @@ Items already known:
   start while a migration is pending.
 - **Sentry** at launch (standing rule), using `@sentry/node` via `--import ./instrument.js`,
   like `~/code/bots`.
-- **Hardening:** set `trustProxy` to loopback only, since nginx is the edge. Update the
+- **Hardening:** set `TRUST_PROXY=127.0.0.1`, since nginx is the edge.
+  - The house vhost generator already sends
+    `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` (`gen-vhost.sh` lines
+    337/358, checked 2026-09-30), so per-address limits will see real clients.
+  - Without `TRUST_PROXY`, every request would appear to come from 127.0.0.1, and the
+    per-address sign-up limit would act site-wide. Update the
   nginx vhost from the house template.
 - **Restore drill:** restore into an isolated DB and verify a known record, revision, and
   annotation. `~/bin/backup-restore-drill.sh` exists.
