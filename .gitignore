@@ -6,3 +6,7 @@ data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# droplet site-factory
+.env*
+!.env.example
