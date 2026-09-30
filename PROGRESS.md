@@ -607,8 +607,13 @@ in order. Its outcome, with every deviation from the plan, is at the top of `doc
 - `NOOSPHERE_REGISTRATION: "open"`, as an explicit value, so a rollback cannot leave a
   stale key in PM2.
 - **Librarian throughput:** the nightly batch went from 50 to 100 per kind (the endpoint
-  maximum). At 50, one contributor at the 200-writes-a-day limit would outrun review
-  forever. Now a sustained flood reaches the monthly budget first.
+  maximum). **This does not close the gap.**
+  - One contributor may still write 200 a day, one address about 1,440, and the site 5,000,
+    against 200 reviews a night (about $1.80).
+  - So a flood still builds a silent, oldest-first backlog, and the monthly alarm would fire
+    only near month end.
+  - I claimed otherwise in the first version of this entry and in a code comment; review
+    caught it the same night. The real fix is queued in ROADMAP ("Librarian backlog").
 - **New alarm:** reaching the **monthly** cap emails once per month. It used to stop review
   silently until the 1st. A per-run stop stays quiet. Mutation-checked three ways: no alarm,
   an alarm every night, an alarm on a per-run stop.

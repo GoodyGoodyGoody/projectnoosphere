@@ -83,10 +83,15 @@ restore-from-backup rollback first.
 - **Schedule:** nightly at 03:20 UTC from the crontab, in the production checkout, logging
   to `~/logs/noosphere-librarian.log` (read it with `botlog noosphere-librarian`). The models
   are Opus 5.5 and GPT-6 Sol, both at medium effort.
-- **Throughput:** up to 100 revisions and 100 annotations a night (the review-queue maximum).
-  The first run cost $0.18 for 12 items plus canaries. The write limits allow far more than
-  that per day, so under a sustained flood **the budget is the ceiling**: the $5 run cap
-  leaves the rest for the next night, and the $50 monthly cap stops review until the 1st.
+- **Throughput:** up to 100 revisions and 100 annotations a night (the review-queue maximum),
+  about $1.80 at the measured cost. The first run cost $0.18 for 12 items plus canaries.
+  - ⚠️ **Known pilot limit: the write limits allow more than that.** One contributor may
+    write 200 a day, one address about 1,440, and the whole site 5,000. Anything above 200 a
+    night **waits, silently**, oldest first, so a flood delays legitimate items.
+  - The $5 run cap does not bind at 200 items. The monthly alarm fires only if the backlog
+    runs all month.
+  - The fix is queued (ROADMAP, "Librarian backlog"): loop the nightly run while the queue
+    comes back full.
 - **Alarms (`~/bin/notify`):**
   - a canary would have been published: the run is discarded and the librarian pauses;
   - the monthly cap is reached: sent once per month (marker file

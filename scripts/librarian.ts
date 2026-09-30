@@ -79,9 +79,10 @@ if (cmd === "status") {
       second: openaiReviewer({ model: "gpt-6-sol", reasoningEffort: "medium", maxTokens: 4000, apiKey: openaiKey }),
       rubricVersion: RUBRIC_VERSION,
       ledger: LEDGER, monthlyCapUsd: MONTHLY_CAP, runCapUsd: RUN_CAP, pauseFile: PAUSE_FILE, notify,
-      // The queue endpoint's maximum, per kind. At the default 50, one busy
-      // contributor (200 writes/day) outran the librarian forever; at 100 + 100
-      // a sustained flood reaches the MONTHLY cap first, which alarms.
+      // The queue endpoint's maximum, per kind. Still below what the write
+      // limits allow (200/contributor/day, 5,000 site-wide), so a flood builds a
+      // silent backlog. The fix is to loop while the queue comes back full
+      // (ROADMAP "Librarian backlog").
       limit: QUEUE_LIMIT,
       // Model ids as the bots dashboard's price table names them.
       onUsage: (reviewer, inTok, outTok) => reportUsage("noosphere-librarian", reviewer.replace(/^[a-z]+\//, ""), inTok, outTok),

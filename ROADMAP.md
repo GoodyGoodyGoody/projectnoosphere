@@ -313,6 +313,27 @@ the bots apply every consequence under the charter. No human is needed.
 - linked-account signals, such as registration IP, timing, and text similarity (2b/2c);
 - public contributor pages with standing (G6).
 
+## Known issue: librarian backlog (found 2026-09-30, after v0.1.1) — OPEN
+
+**The problem.** The nightly run reviews at most 100 revisions and 100 annotations, the
+review-queue maximum. The write limits allow more than that: 200 per contributor a day,
+about 1,440 per address, and 5,000 site-wide. Anything above the nightly amount waits,
+silently and oldest first, so a flood delays legitimate items. The $5 run cap doesn't bind
+at 200 items (about $1.80), and the monthly alarm would fire only after a month of backlog.
+
+**The fix.** It is small and needs a release.
+- In `scripts/librarian.ts`, call `runCycle` again while the last queue fetch came back
+  full.
+- Stop when the run is stopped by budget, paused, a canary fails, or it is unverified.
+- Carry the remaining run budget forward, so the $5 run cap covers the whole night.
+- `runCycle` needs to report whether its queue fetch was full.
+- Each pass re-runs the canaries, about $0.03 each, which is acceptable.
+- Test it with a queue bigger than the limit, and mutation-check that the loop stops on
+  each condition.
+
+**Until then.** There is no traffic yet (the pilot opened 2026-09-30). If a backlog
+appears, `npm run librarian -- run` can be run by hand to clear another batch.
+
 ## Known issue: slugs outlive quarantine (found 2026-09-30) — FIXED in 2c part 1
 
 Slugs are now minted at first publication, from the reviewed title (migration 004). The
