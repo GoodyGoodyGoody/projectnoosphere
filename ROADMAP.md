@@ -313,7 +313,7 @@ the bots apply every consequence under the charter. No human is needed.
 - linked-account signals, such as registration IP, timing, and text similarity (2b/2c);
 - public contributor pages with standing (G6).
 
-## Known issue: librarian backlog (found 2026-09-30, after v0.1.1) — OPEN
+## Known issue: librarian backlog (found 2026-09-30, after v0.1.1) — FIXED in v0.1.2
 
 **The problem.** The nightly run reviews at most 100 revisions and 100 annotations, the
 review-queue maximum. The write limits allow more than that: 200 per contributor a day,
@@ -331,8 +331,10 @@ at 200 items (about $1.80), and the monthly alarm would fire only after a month 
 - Test it with a queue bigger than the limit, and mutation-check that the loop stops on
   each condition.
 
-**Until then.** There is no traffic yet (the pilot opened 2026-09-30). If a backlog
-appears, `npm run librarian -- run` can be run by hand to clear another batch.
+**Fixed in v0.1.2 (`runNight` in `src/librarian/run.ts`).** A night loops cycles while
+the queue comes back full, and carries the run cap across them. It stops on every condition
+listed above, and also when an already-seen item comes back. Each stop condition has a test
+that was mutation-checked.
 
 ## Known issue: slugs outlive quarantine (found 2026-09-30) — FIXED in 2c part 1
 
@@ -405,4 +407,4 @@ in the URL, the history links, and any sitemap entry made before the quarantine.
   - **Google Search Console:** property added and DNS-verified; `gsc-bot` resubmits weekly.
   - **Bing:** Randall imported it from Search Console on 2026-09-30; bingbot fetched `/`
     and `robots.txt` minutes later.
-  - **IndexNow:** comes with 2d.
+  - **IndexNow:** ✅ v0.1.2. The librarian pings after each night; see `docs/operations.md`.

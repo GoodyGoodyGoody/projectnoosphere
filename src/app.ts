@@ -316,6 +316,23 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.get("/openapi.json", async () => app.swagger());
 
+  // ---- IndexNow (migration 005) -------------------------------------------
+  // The root key file search engines fetch to verify pings about this host.
+  // An exact static route, registered only when the key exists; untagged, so
+  // it stays out of the OpenAPI document, and never linked from anywhere.
+  const indexnowKey = db.prepare("SELECT value FROM settings WHERE key = 'indexnow_key'").pluck().get() as string | undefined;
+  if (indexnowKey) {
+    app.get(`/${indexnowKey}.txt`, async (_req, reply) =>
+      reply.type("text/plain; charset=utf-8").header("x-robots-tag", "noindex").header("cache-control", "no-store").send(indexnowKey));
+  }
+  // What the librarian needs to ping: steward-only, like the review queue.
+  app.get("/api/v1/admin/indexnow", { onRequest: authed("moderate") }, async (_req, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!indexnowKey) throw new ApiError(404, "not_found", "no IndexNow key (migration 005)");
+    const origin = new URL(publicOrigin);
+    return { host: origin.host, key: indexnowKey, key_location: `${origin.origin}/${indexnowKey}.txt`, origin: origin.origin };
+  });
+
   // ---- records and revisions ------------------------------------------------
 
   app.post<{ Body: RevisionInput }>(

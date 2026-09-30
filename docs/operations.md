@@ -67,8 +67,10 @@ restore-from-backup rollback first.
     spend against the $50 cap.
   - `npm run librarian -- pause "reason"` / `npm run librarian -- resume`: the kill switch.
     It is a file, `librarian.paused`, in `SITE_DATA_DIR`.
-  - `npm run librarian -- run --dry-run`: the full cycle against the real queue, using stub
+  - `npm run librarian -- run --dry-run`: one cycle against the real queue, using stub
     reviewers. It applies nothing and costs $0.
+  - `npm run librarian -- indexnow-backfill`: pings IndexNow with every URL in the sitemap.
+    Use it after a failed ping or when IndexNow is newly set up.
 - **Environment:**
   - `NOOSPHERE_LIBRARIAN_TOKEN`: a steward key made with `npm run cli -- contributor create
     --steward --name "Librarian"`.
@@ -83,15 +85,23 @@ restore-from-backup rollback first.
 - **Schedule:** nightly at 03:20 UTC from the crontab, in the production checkout, logging
   to `~/logs/noosphere-librarian.log` (read it with `botlog noosphere-librarian`). The models
   are Opus 5.5 and GPT-6 Sol, both at medium effort.
-- **Throughput:** up to 100 revisions and 100 annotations a night (the review-queue maximum),
-  about $1.80 at the measured cost. The first run cost $0.18 for 12 items plus canaries.
-  - ⚠️ **Known pilot limit: the write limits allow more than that.** One contributor may
-    write 200 a day, one address about 1,440, and the whole site 5,000. Anything above 200 a
-    night **waits, silently**, oldest first, so a flood delays legitimate items.
-  - The $5 run cap does not bind at 200 items. The monthly alarm fires only if the backlog
-    runs all month.
-  - The fix is queued (ROADMAP, "Librarian backlog"): loop the nightly run while the queue
-    comes back full.
+- **Throughput (v0.1.2):** a night runs review cycles of up to 100 revisions and 100
+  annotations each, until the queue is drained.
+  - **Every cycle checks its own canaries first.**
+  - **The $5 run cap covers the whole night**, which is about 500 items at the measured
+    ~$0.009 each.
+  - **Under a sustained flood the budget is the ceiling.** Each night clears $5 worth, and
+    the $50 monthly cap is reached in about ten days, which sends the monthly alarm. The log
+    shows `"backlogRemaining": true` when a night ends with items still waiting.
+  - **Stops early, never loops:** paused, a canary problem, apply errors, the budget, an
+    already-seen item coming back (a "no progress" stop, which also emails), or 10 passes.
+  - The log's `stoppedBecause` says which one.
+- **IndexNow (v0.1.2):** after applying a night's decisions, the librarian pings
+  `api.indexnow.org` with the changed record pages and the home page. Bing, Yandex and the
+  other participants pick them up from there.
+  - It first checks that the public key file serves the right key.
+  - A failed ping shows as `"error"` in the log, which the bots dashboard flags. It never
+    fails the run.
 - **Alarms (`~/bin/notify`):**
   - a canary would have been published: the run is discarded and the librarian pauses;
   - the monthly cap is reached: sent once per month (marker file

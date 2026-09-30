@@ -4,8 +4,10 @@
 //   npm run librarian -- status
 //   npm run librarian -- pause "reason"
 //   npm run librarian -- resume
-//   npm run librarian -- run --dry-run      # full cycle, stub reviewers that hold everything, $0
-//   npm run librarian -- run                # real models: Claude Opus 5.5 + GPT-6 Sol
+//   npm run librarian -- run --dry-run      # one cycle, stub reviewers that hold everything, $0
+//   npm run librarian -- run                # a night: real models (Claude Opus 5.5 + GPT-6 Sol),
+//                                           # cycles until the queue is drained, then IndexNow
+//   npm run librarian -- indexnow-backfill  # ping IndexNow with every URL in the sitemap
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -13,7 +15,8 @@ import { NoosphereClient } from "../src/librarian/client.ts";
 import { scriptedReviewer } from "../src/librarian/fake.ts";
 import { anthropicReviewer, openaiReviewer } from "../src/librarian/providers.ts";
 import { RUBRIC_VERSION } from "../src/librarian/prompt.ts";
-import { runCycle } from "../src/librarian/run.ts";
+import { changedUrls, submitIndexNow } from "../src/librarian/indexnow.ts";
+import { runCycle, runNight } from "../src/librarian/run.ts";
 import { reportUsage } from "../src/librarian/usage-report.ts";
 import { SpendLedger } from "../src/librarian/spend.ts";
 
@@ -39,7 +42,8 @@ const PAUSE_FILE = join(DATA_DIR, "librarian.paused");
 const LEDGER = new SpendLedger(join(DATA_DIR, "librarian-spend.jsonl"));
 const MONTHLY_CAP = Number(process.env.LIBRARIAN_MONTHLY_CAP_USD ?? 50); // Randall's cap, 2026-09-30
 const RUN_CAP = Number(process.env.LIBRARIAN_RUN_CAP_USD ?? 5);
-const QUEUE_LIMIT = 100; // the review-queue endpoint's maximum (schemas.ts), per kind
+const QUEUE_LIMIT = 100;
+const MAX_PASSES = 10; // a backstop; the $5 run cap binds first (~500 items) // the review-queue endpoint's maximum (schemas.ts), per kind
 
 function notify(subject: string, body: string): void {
   const bin = process.env.NOTIFY_BIN ?? "/home/randall/bin/notify";
@@ -73,22 +77,39 @@ if (cmd === "status") {
     // measured ~$0.009 per item with the charter prompt cached).
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!process.env.ANTHROPIC_API_KEY || !openaiKey) throw new Error("ANTHROPIC_API_KEY and OPENAI_API_KEY must be set (.env)");
-    const report = await runCycle({
-      client: new NoosphereClient(base, token),
+    const client = new NoosphereClient(base, token);
+    const applied: { action: string; revisionId: string }[] = [];
+    const night = await runNight({
+      client,
       primary: anthropicReviewer({ model: "claude-opus-5-5", effort: "medium", maxTokens: 4000 }),
       second: openaiReviewer({ model: "gpt-6-sol", reasoningEffort: "medium", maxTokens: 4000, apiKey: openaiKey }),
       rubricVersion: RUBRIC_VERSION,
       ledger: LEDGER, monthlyCapUsd: MONTHLY_CAP, runCapUsd: RUN_CAP, pauseFile: PAUSE_FILE, notify,
-      // The queue endpoint's maximum, per kind. Still below what the write
-      // limits allow (200/contributor/day, 5,000 site-wide), so a flood builds a
-      // silent backlog. The fix is to loop while the queue comes back full
-      // (ROADMAP "Librarian backlog").
+      // Per cycle, per kind (the queue endpoint's maximum). The night repeats
+      // cycles until the queue is drained, within the $5 run cap (runNight).
       limit: QUEUE_LIMIT,
+      maxPasses: MAX_PASSES,
+      onApplied: (action, _targetId, revisionId) => { applied.push({ action, revisionId }); },
       // Model ids as the bots dashboard's price table names them.
       onUsage: (reviewer, inTok, outTok) => reportUsage("noosphere-librarian", reviewer.replace(/^[a-z]+\//, ""), inTok, outTok),
     });
+    // Tell search engines which public pages changed. Never fails the run; a
+    // failed ping shows in the log as "error" (the dashboard flags it).
+    const cfg = await client.indexnow().catch(() => null);
+    const report = {
+      ...night,
+      indexnow: cfg
+        ? await submitIndexNow(cfg, await changedUrls(client, applied, cfg.origin))
+        : { submitted: 0, skipped: "no IndexNow settings from the API" },
+    };
     console.log(JSON.stringify(report, null, 2));
-    process.exit(report.canaryFailure || report.applyErrors.length ? 1 : 0);
+    if (report.stoppedBecause.startsWith("no progress")) {
+      // Items came back after being decided: something is not recording
+      // decisions. Loud on purpose; the night stopped before paying for more.
+      console.error(`ERROR: librarian night stopped with ${report.stoppedBecause}`);
+      notify("Noosphere librarian: decided items came back", `The night stopped early: ${report.stoppedBecause}.\nNothing was billed twice, but decisions may not be recording. Ask an agent to look at the librarian log.`);
+    }
+    process.exit(report.canaryFailure || report.applyErrors.length || report.stoppedBecause.startsWith("no progress") ? 1 : 0);
   }
   const hold = () => "hold" as const;
   // A dry run reads the real queue but applies nothing: every moderation call
@@ -108,7 +129,18 @@ if (cmd === "status") {
     limit: QUEUE_LIMIT,
   });
   console.log(JSON.stringify(report, null, 2));
+} else if (cmd === "indexnow-backfill") {
+  // For pages published before IndexNow existed, or after a failed ping.
+  const token = process.env.NOOSPHERE_LIBRARIAN_TOKEN;
+  if (!token) throw new Error("NOOSPHERE_LIBRARIAN_TOKEN is not set");
+  const client = new NoosphereClient(process.env.NOOSPHERE_API_BASE ?? `http://127.0.0.1:${process.env.PORT ?? 4400}`, token);
+  const cfg = await client.indexnow();
+  if (!cfg) throw new Error("no IndexNow settings from the API (migration 005 applied?)");
+  const urls = await client.sitemapUrls();
+  const result = await submitIndexNow(cfg, urls);
+  console.log(JSON.stringify({ urls: urls.length, ...result }, null, 2));
+  process.exitCode = result.error ? 1 : 0;
 } else {
-  console.error("usage: librarian status | pause [reason] | resume | run [--dry-run]");
+  console.error("usage: librarian status | pause [reason] | resume | run [--dry-run] | indexnow-backfill");
   process.exitCode = 2;
 }

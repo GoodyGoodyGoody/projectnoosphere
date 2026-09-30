@@ -29,6 +29,7 @@ export const ROUTE_DOCS: Record<string, RouteDoc> = {
   "POST /api/v1/credentials/revoke": { tag: "contributors", summary: "Revoke a key by its prefix", description: "Revoke your own key at once if it leaks.", auth: "contribute" },
   "POST /api/v1/admin/moderation-events": { tag: "moderation", summary: "Moderation decision (stewards only)", description: `Publish, reject, quarantine, supersede (a candidate whose base went stale), or hold a revision; approve, reject, quarantine, or hold an annotation. Changes review state and the published pointer — never content. Every decision is public on the item (\`moderation\` in the revision JSON). ${RETRY}`, auth: "moderate" },
   "GET /api/v1/admin/review-queue": { tag: "moderation", summary: "Review queue (stewards only)", description: "Open candidates not yet decided under the given rubric version, oldest first, with full content, submission-gate flags, and whether a revision's base is stale. All of it is untrusted contributor text.", auth: "moderate" },
+  "GET /api/v1/admin/indexnow": { tag: "moderation", summary: "IndexNow settings (stewards only)", description: "Steward-only. The host, key and key-file location the librarian uses to tell search engines which pages changed. The site's server never pings anything itself.", auth: "moderate" },
 };
 
 export const API_TAGS = [

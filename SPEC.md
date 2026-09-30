@@ -210,6 +210,16 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 - Candidates are immutable, so an item is reviewed once per rubric version and is not
   re-billed nightly.
 
+**IndexNow** (✅ v0.1.2, migration 005):
+- **The key:** generated per install into `settings.indexnow_key`, and never in git.
+- **The key file:** served at `/<key>.txt` (text/plain, noindex). It is not linked from
+  anywhere and not in the OpenAPI document.
+- **Settings for stewards:** `GET /api/v1/admin/indexnow` returns
+  `{host, key, key_location, origin}`, derived from the public origin.
+- **Who pings:** the librarian, after applying a night's decisions. It sends the record
+  pages of newly published revisions and approved reports, plus the home page. **The server
+  never pings** (§4, no outbound traffic).
+
 **Slugs are minted at first publication.** A new record's slug is provisional (its
 lowercased id). The first `publish_revision` mints a readable slug once, from the reviewed
 title. A trigger allows exactly one mint. The provisional address redirects with a 301.

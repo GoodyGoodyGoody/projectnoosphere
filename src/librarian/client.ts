@@ -38,6 +38,25 @@ export class NoosphereClient {
     };
   }
 
+  // IndexNow settings (steward-only): the key, where it is served, and the host.
+  async indexnow(): Promise<{ host: string; key: string; key_location: string; origin: string } | null> {
+    const res = await this.call("GET", "/api/v1/admin/indexnow");
+    return res.status === 200 ? res.body : null;
+  }
+
+  // One exact revision, as the public API shows it (null if not found).
+  async revision(id: string): Promise<any | null> {
+    const res = await this.call("GET", `/api/v1/revisions/${encodeURIComponent(id)}`);
+    return res.status === 200 ? res.body.revision : null;
+  }
+
+  // The public sitemap's URLs (for an IndexNow backfill).
+  async sitemapUrls(): Promise<string[]> {
+    const res = await this.call("GET", "/sitemap.xml");
+    if (res.status !== 200 || typeof res.body !== "string") throw new Error(`sitemap: HTTP ${res.status}`);
+    return [...res.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
+  }
+
   // Idempotent: a rerun after a crash replays instead of double-applying.
   async moderate(action: string, targetId: string, reason: string, rubricVersion: string): Promise<ApiResponse> {
     return this.call(

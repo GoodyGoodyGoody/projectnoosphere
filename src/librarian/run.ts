@@ -32,6 +32,10 @@ export interface CycleOptions {
   now?: () => Date;
   canaries?: Canary[];
   limit?: number;
+  // Called for each successfully applied decision. revisionId is the revision
+  // the item belongs to (itself, or an annotation's target), so the caller can
+  // tell search engines which record page changed (IndexNow, scripts/librarian.ts).
+  onApplied?: (action: string, targetId: string, revisionId: string) => void;
   // Called once per model call (the CLI reports to the bots dashboard).
   onUsage?: (reviewer: string, inputTokens: number, outputTokens: number) => void | Promise<void>;
 }
@@ -39,6 +43,7 @@ export interface CycleOptions {
 interface WorkItem {
   kind: "revision" | "annotation";
   targetId: string;
+  revisionId: string;
   payload: Record<string, unknown>;
   canary?: Canary;
 }
@@ -57,6 +62,8 @@ export interface CycleReport {
   stoppedByBudget: boolean;
   // The MONTHLY cap stopped this run (a per-run stop just continues tomorrow).
   monthlyCapReached: boolean;
+  // The queue came back at its limit, so more may be waiting (runNight loops on it).
+  queueFull: boolean;
   unverified: boolean;
   canaries: { name: string; expect: string; decision: VerdictValue }[];
   canaryFailure: boolean;
@@ -105,7 +112,7 @@ export async function runCycle(o: CycleOptions): Promise<CycleReport> {
   const now = o.now?.() ?? new Date();
   const month = now.toISOString().slice(0, 7);
   const report: CycleReport = {
-    reviewed: 0, superseded: 0, applied: {}, applyErrors: [], stoppedByBudget: false, monthlyCapReached: false, unverified: false,
+    reviewed: 0, superseded: 0, applied: {}, applyErrors: [], stoppedByBudget: false, monthlyCapReached: false, queueFull: false, unverified: false,
     canaries: [], canaryFailure: false, spendRunUsd: 0, spendMonthUsd: o.ledger.monthTotal(month),
   };
 
@@ -114,14 +121,16 @@ export async function runCycle(o: CycleOptions): Promise<CycleReport> {
     return report;
   }
 
-  const queue = await o.client.queue(o.rubricVersion, o.limit ?? 50);
+  const limit = o.limit ?? 50;
+  const queue = await o.client.queue(o.rubricVersion, limit);
+  report.queueFull = queue.revisions.length >= limit || queue.annotations.length >= limit;
   const stale = queue.revisions.filter((i) => i.base_is_stale).map((i) => i.revision.id as string);
   const canaries = o.canaries ?? pickCanaries(now.toISOString());
   const work: WorkItem[] = [
     // Canaries first, so a budget stop can never leave a run unverified by chance.
-    ...canaries.map((c) => ({ kind: c.kind, targetId: String(c.payload.id), payload: c.payload, canary: c })),
-    ...queue.revisions.filter((i) => !i.base_is_stale).map((i) => ({ kind: "revision" as const, targetId: i.revision.id, payload: revisionPayload(i) })),
-    ...queue.annotations.map((i) => ({ kind: "annotation" as const, targetId: i.annotation.id, payload: annotationPayload(i) })),
+    ...canaries.map((c) => ({ kind: c.kind, targetId: String(c.payload.id), revisionId: "", payload: c.payload, canary: c })),
+    ...queue.revisions.filter((i) => !i.base_is_stale).map((i) => ({ kind: "revision" as const, targetId: i.revision.id, revisionId: i.revision.id, payload: revisionPayload(i) })),
+    ...queue.annotations.map((i) => ({ kind: "annotation" as const, targetId: i.annotation.id, revisionId: i.annotation.revision_id, payload: annotationPayload(i) })),
   ];
 
   const decided: Decided[] = [];
@@ -200,8 +209,89 @@ export async function runCycle(o: CycleOptions): Promise<CycleReport> {
     report.reviewed++;
     const action = ACTIONS[d.kind][d.decision];
     const res = await o.client.moderate(action, d.targetId, publicReason(d.decision, d.opinions), o.rubricVersion);
-    if (res.status === 201) tally(action);
-    else report.applyErrors.push(`${d.targetId} ${action}: HTTP ${res.status} ${res.body?.error?.code ?? ""}`);
+    if (res.status === 201) {
+      tally(action);
+      o.onApplied?.(action, d.targetId, d.revisionId);
+    } else report.applyErrors.push(`${d.targetId} ${action}: HTTP ${res.status} ${res.body?.error?.code ?? ""}`);
   }
   return report;
+}
+
+// ---- a whole night: cycles until the queue is drained ----------------------
+//
+// One cycle reviews at most `limit` revisions and `limit` annotations. The
+// write limits allow far more per day, so a single cycle let a busy contributor
+// build a backlog that never cleared (found 2026-09-30, after v0.1.1). A night
+// runs cycles until the queue is drained, and stops early — never loops — when:
+//   - a cycle was paused, tripped a canary, or could not verify its canaries;
+//   - a cycle had apply errors (a failed apply records no event, so the same
+//     items would come straight back and be billed again, every pass);
+//   - the budget stopped it (the run cap is carried across cycles, so $5 is
+//     the whole night, not each pass);
+//   - the next queue repeats an item already handed out tonight (no progress,
+//     for any reason — checked BEFORE paying for another cycle's canaries);
+//   - it reached maxPasses (a backstop).
+// Each cycle runs its own canaries first: every batch is verified.
+export interface NightOptions extends CycleOptions {
+  maxPasses?: number;
+}
+
+export interface NightReport extends CycleReport {
+  passes: number;
+  stoppedBecause: string;
+  backlogRemaining: boolean;
+}
+
+const queueIds = (q: Awaited<ReturnType<NoosphereClient["queue"]>>) => [
+  ...q.revisions.map((i) => String(i.revision.id)),
+  ...q.annotations.map((i) => String(i.annotation.id)),
+];
+
+export async function runNight(o: NightOptions): Promise<NightReport> {
+  const limit = o.limit ?? 50;
+  const maxPasses = o.maxPasses ?? 10;
+  const seen = new Set<string>();
+  const night: NightReport = {
+    passes: 0, stoppedBecause: "", backlogRemaining: false,
+    reviewed: 0, superseded: 0, applied: {}, applyErrors: [], stoppedByBudget: false, monthlyCapReached: false,
+    queueFull: false, unverified: false, canaries: [], canaryFailure: false, spendRunUsd: 0, spendMonthUsd: 0,
+  };
+  for (;;) {
+    if (night.passes > 0) {
+      const peek = queueIds(await o.client.queue(o.rubricVersion, limit));
+      if (peek.length === 0) { night.stoppedBecause = "queue drained"; break; }
+      if (peek.some((id) => seen.has(id))) { night.stoppedBecause = "no progress: an item came back"; break; }
+    }
+    const client = Object.create(o.client) as NoosphereClient;
+    client.queue = async (rubric: string, lim?: number) => {
+      const q = await o.client.queue(rubric, lim);
+      for (const id of queueIds(q)) seen.add(id);
+      return q;
+    };
+    const r = await runCycle({ ...o, client, runCapUsd: o.runCapUsd - night.spendRunUsd });
+    night.passes++;
+    night.reviewed += r.reviewed;
+    night.superseded += r.superseded;
+    for (const [k, v] of Object.entries(r.applied)) night.applied[k] = (night.applied[k] ?? 0) + v;
+    night.applyErrors.push(...r.applyErrors);
+    night.canaries.push(...r.canaries);
+    night.canaryFailure ||= r.canaryFailure;
+    night.monthlyCapReached ||= r.monthlyCapReached;
+    night.stoppedByBudget = r.stoppedByBudget;
+    night.unverified = r.unverified;
+    night.queueFull = r.queueFull;
+    night.spendRunUsd += r.spendRunUsd;
+    night.spendMonthUsd = r.spendMonthUsd;
+    if (r.paused !== undefined) night.paused = r.paused;
+
+    if (r.paused !== undefined) night.stoppedBecause = "paused";
+    else if (r.canaryFailure) night.stoppedBecause = "canary published: run discarded";
+    else if (r.applyErrors.length) night.stoppedBecause = "apply errors";
+    else if (r.stoppedByBudget || r.unverified) night.stoppedBecause = r.monthlyCapReached ? "monthly budget" : "run budget";
+    else if (!r.queueFull) night.stoppedBecause = "queue drained";
+    else if (night.passes >= maxPasses) night.stoppedBecause = "max passes";
+    if (night.stoppedBecause) break;
+  }
+  night.backlogRemaining = night.queueFull && night.stoppedBecause !== "queue drained";
+  return night;
 }
