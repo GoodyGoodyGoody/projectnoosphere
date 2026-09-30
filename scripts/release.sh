@@ -79,6 +79,13 @@ if [ "$LOCK_CHANGED" = 1 ]; then
   npm ci --no-audit --no-fund >/dev/null || undo "npm ci failed"
 fi
 
+# --- 2b. gate: the full check suite (typecheck, tests, demo) on the exact code
+#         being released, BEFORE anything live changes. deploy-site's own gate
+#         is only the typecheck; a broken release that reaches verification is
+#         live until verification fails (~25 s in the rehearsal). -------------
+say "gate: npm run check"
+npm run -s check >/dev/null 2>&1 || undo "the check suite failed on ${NEW:0:12} (nothing live was changed)"
+
 # --- 3. migrate (before any worker restarts: the server refuses to boot with
 #        pending migrations, and migrations are additive so the old workers
 #        keep serving against the newer schema) ------------------------------

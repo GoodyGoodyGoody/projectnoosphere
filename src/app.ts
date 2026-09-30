@@ -154,7 +154,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     genReqId: () => newId("req"),
     requestIdHeader: false,
     trustProxy: opts.trustProxy ?? false,
-    return503OnClosing: true,
+    // A closing worker keeps serving what reaches it while it drains. With
+    // `true`, a PM2 cluster reload answered 2 of 100 probes with 503 (release
+    // rehearsal, 2026-09-30): requests already routed to the worker being
+    // replaced were refused instead of served.
+    return503OnClosing: false,
   });
 
   app.setValidatorCompiler(({ schema, httpPart }) =>

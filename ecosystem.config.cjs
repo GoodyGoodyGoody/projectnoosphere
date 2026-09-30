@@ -25,6 +25,8 @@ module.exports = {
       // (the batlas lesson: a ceiling alone restarted 1,299 times).
       node_args: ["--max-old-space-size=256"],
       max_memory_restart: "400M",
+      // Time for a replaced worker to finish in-flight requests on reload.
+      kill_timeout: 5000,
       time: true,
       env: {
         NODE_ENV: "production",
