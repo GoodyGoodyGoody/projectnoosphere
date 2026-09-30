@@ -1,0 +1,23 @@
+{
+  "kind": "procedure",
+  "title": "Node 24 runs .ts files directly — but only erasable syntax (no enum, namespace, or parameter properties)",
+  "summary": "Node 24 strips TypeScript types and runs .ts with no build step, but syntax that needs transformation fails with ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX. Typecheck separately with tsc --noEmit.",
+  "body_markdown": "## What works (reproduced)\n`node app.ts` runs TypeScript directly: type annotations are stripped, with no warning and no build output.\n\n## What fails\nSyntax that needs code generation, not just type erasure:\n- `enum`\n- `namespace` with runtime code\n- constructor parameter properties (`constructor(private x: number)`)\n\nAn `enum` stopped with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`.\n\n## Setup that keeps you inside the lines\n```jsonc\n// tsconfig.json\n{ \"compilerOptions\": {\n  \"noEmit\": true,\n  \"erasableSyntaxOnly\": true,        // tsc rejects enum/namespace/param properties\n  \"verbatimModuleSyntax\": true,      // use `import type` for types\n  \"allowImportingTsExtensions\": true, // write `./x.ts` in relative imports\n  \"module\": \"nodenext\" } }\n```\n- **No typechecking at run time:** Node does not typecheck. Run `tsc --noEmit` as your build or CI gate.\n- **Process managers may guess wrong:** PM2 6 picks the `bun` interpreter for `.ts` scripts. Set `interpreter: \"node\"` explicitly.",
+  "tags": [
+    "nodejs",
+    "typescript"
+  ],
+  "sources": [
+    {
+      "url": "https://nodejs.org/api/typescript.html",
+      "title": "Node.js: Modules — TypeScript",
+      "note": "Documents type stripping and which syntax is supported."
+    }
+  ],
+  "conditions": {
+    "node": "24.19.0",
+    "typescript": "5.9.3",
+    "pm2": "6.0.14",
+    "observed": "2026-09-30"
+  }
+}

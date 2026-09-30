@@ -13,27 +13,29 @@ npm start                                     # 127.0.0.1:4400; refuses to start
 npm run check                                 # build + test + demo
 ```
 
-## Start / stop / reload: *NOT YET*
-The plan is PM2 in cluster mode (≥ 2 instances), managed by `~/bin/deploy-site` from
-`ecosystem.config.cjs`, and registered in `~/bin/sites.json`.
+## Start / stop / reload
+PM2 cluster mode ×2, from `ecosystem.config.cjs` in the production checkout.
+- First start: `pm2 start ecosystem.config.cjs && pm2 save`.
+- Config changes: `pm2 reload ecosystem.config.cjs --only projectnoosphere`. Changing
+  `script` needs delete + start.
+- Everything else goes through `scripts/release.sh`.
 
-## Deploy: *NOT YET*
-Planned sequence:
-1. `build-preflight`
-2. `npm ci`
-3. `npm run check`
-4. `npm run cli -- migrate` (explicit)
-5. `deploy-site projectnoosphere`: build gate, then reload by ecosystem **file**
-6. probe `/readyz` locally and over the public URL
+## Deploy (rehearsed 2026-09-30)
+1. In the dev worktree: commit, push, then `git tag vX.Y.Z && git push --tags`.
+2. In the production checkout: `scripts/release.sh vX.Y.Z`. It will:
+   - run the check suite on the release, before anything live changes;
+   - migrate;
+   - run `deploy-site` (preflight, conformance, build gate, reload by file, verify);
+   - prove the new commit is served on every probe.
 
-## Rollback: *NOT YET* (design, then test)
-There is no artifact swap in the node deploy path, so a rollback means:
-1. `git checkout <last-good-tag>`
-2. reload
-3. probe
+## Rollback (rehearsed 2026-09-30)
+- **Automatic:** `release.sh` undoes any failed release itself. It checks out the previous
+  commit, reloads, and proves the old commit is served.
+- **Manual:** `scripts/release.sh <previous-tag>` is a release like any other, and old code
+  boots against the newer schema.
 
-Migrations are forward-only and additive. A release that needs a destructive migration also
-needs a written restore-from-backup rollback, tested before the release.
+**Migrations are additive only.** A destructive one needs its own written and tested
+restore-from-backup rollback first.
 
 ## Logs
 - Fastify JSON logs go to PM2's log files: `pm2 jlist` → `pm_out_log_path`.
@@ -79,13 +81,14 @@ needs a written restore-from-backup rollback, tested before the release.
 - **Revoke:** `npm run cli -- credential revoke <prefix>`. It takes effect on the next request.
 - **List:** `npm run cli -- contributor list`.
 
-## Backups and restore: *NOT YET verified*
+## Backups and restore
 - `~/bin/data-backup.sh` discovers `*.sqlite` under `~/code` and every SITE_DATA_DIR declared
   in the fleet's ecosystem files, and ships it to Drive daily.
-- **Phase 4 must:**
-  - confirm the production path is swept (`data-backup.sh --list-roots`);
-  - run `~/bin/backup-restore-drill.sh`, or a Noosphere-specific drill, into an isolated DB;
-  - verify a known record, revision (hash recomputes), and annotation.
+- **Verify a backup:** `npm run restore-check -- <backup.sqlite> [--expect-revision rev_…]`.
+  It works on a copy, and checks integrity, foreign keys, full migration, every
+  revision's and annotation's content hash, review states, and pointers.
+- **At launch:** confirm the production path is swept (`data-backup.sh --list-roots`), then
+  run `restore-check` on the first real backup.
 
 ## Incidents: *NOT YET* (Phase 2 adds quarantine)
 - **Malicious contribution:** quarantine the revision or annotation, with a moderation event

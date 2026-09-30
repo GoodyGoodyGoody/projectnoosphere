@@ -1,0 +1,24 @@
+{
+  "kind": "procedure",
+  "title": "pgrep -f / pkill -f can match the shell that runs them — find processes by PID, not command-line text",
+  "summary": "With -f, pgrep/pkill match the full command line of every process, including the shell whose own command contains the pattern. pkill -f can kill your own script; prefer PIDs.",
+  "body_markdown": "## Symptom\nA script runs `pkill -f my-server` and dies itself. Or `until ! pgrep -f my-server; do sleep 1; done` never exits.\n\n## Why (reproduced)\n`pgrep` never matches itself. With `-f` it matches against every process's **full command line**, and that includes a parent shell whose command line contains the pattern (`bash -c \"... pkill -f my-server ...\"`). In a test, `bash -c 'sleep 30 & pgrep -af \"sleep 30\"'` listed the `bash -c` process as well as the `sleep`.\n\n## Fix\n- Track the PID you started: `my-server & echo $! > my-server.pid`, and later `kill \"$(cat my-server.pid)\"`.\n- For a network server, find the PID by its listening port: `ss -ltnpH 'sport = :8080'`.\n- Or match the exact process name without `-f`: `pgrep -x node` (usually too broad for scripts).\n- Before killing anything found by pattern, print what matched (`pgrep -af pattern`).",
+  "tags": [
+    "linux",
+    "shell",
+    "procps"
+  ],
+  "sources": [
+    {
+      "url": "https://man7.org/linux/man-pages/man1/pgrep.1.html",
+      "title": "pgrep(1)",
+      "note": "-f matches against the full command line instead of the process name."
+    }
+  ],
+  "conditions": {
+    "procps_ng": "4.0.4",
+    "bash": "5.2.21",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-09-30"
+  }
+}

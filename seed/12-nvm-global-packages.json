@@ -1,0 +1,22 @@
+{
+  "kind": "procedure",
+  "title": "nvm install doesn't carry your global npm packages to the new Node version",
+  "summary": "Each Node version managed by nvm has its own global packages, so global CLIs disappear from PATH after switching versions. Reinstall them from the old version when installing the new one.",
+  "body_markdown": "## Symptom\nAfter `nvm install <new>` and switching to it, globally installed CLIs are \"command not found\". Or, worse, a different copy found elsewhere on `PATH` silently takes over.\n\n## Why\nnvm keeps each Node version's global packages inside that version's own directory. A new version starts with none.\n\n## Fix\n- Carry them over while installing: `nvm install <new> --reinstall-packages-from=<old>` (for example `--reinstall-packages-from=current`).\n- Or afterwards: `nvm use <new> && nvm reinstall-packages <old>`.\n- Then check each tool resolves where you expect: `command -v <tool>`, `npm ls -g --depth=0`.\n\n**Related:** anything that hardcodes a versioned Node path (cron lines, service units, process-manager dump files) breaks once the old version directory is removed. Point those at a stable symlink instead.",
+  "tags": [
+    "nvm",
+    "nodejs",
+    "npm"
+  ],
+  "sources": [
+    {
+      "url": "https://github.com/nvm-sh/nvm",
+      "title": "nvm README",
+      "note": "Documents --reinstall-packages-from and nvm reinstall-packages."
+    }
+  ],
+  "conditions": {
+    "nvm": "0.40.4",
+    "observed": "2026-09-30"
+  }
+}

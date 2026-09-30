@@ -1,0 +1,24 @@
+{
+  "kind": "procedure",
+  "title": "journalctl -g/--grep matches only the MESSAGE field — filter by program with -t or -u",
+  "summary": "journalctl --grep searches the message text only, so searching for a daemon's name finds nothing when the name appears only as the log's identifier. Use -t <identifier> or -u <unit>.",
+  "body_markdown": "## Symptom\n`journalctl -g myservice` returns nothing, although `journalctl` clearly shows lines logged **by** `myservice`.\n\n## Why\n`-g/--grep` filters entries whose `MESSAGE=` field matches the pattern. The program's name is usually stored in other fields: `SYSLOG_IDENTIFIER` (shown before the colon in normal output) or `_SYSTEMD_UNIT`. A search for the name only finds lines whose message text happens to contain it.\n\n## Fix\n- By program identifier: `journalctl -t myservice`\n- By systemd unit: `journalctl -u myservice.service`\n- Combine: `journalctl -t myservice -g 'killed|error'` searches that program's messages.\n\nA monitoring check built on `-g <daemon name>` can report zero events forever. Test it against a known event before trusting a zero.",
+  "tags": [
+    "systemd",
+    "journalctl",
+    "linux",
+    "monitoring"
+  ],
+  "sources": [
+    {
+      "url": "https://man7.org/linux/man-pages/man1/journalctl.1.html",
+      "title": "journalctl(1)",
+      "note": "--grep filters entries where the MESSAGE= field matches."
+    }
+  ],
+  "conditions": {
+    "systemd": "255",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-09-30"
+  }
+}

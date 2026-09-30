@@ -19,8 +19,8 @@ steward. Nothing is deployed, and no shared droplet infrastructure has been touc
 **2b and 2c are complete.** The librarian is built and has run for real: Claude Opus 5.5 plus
 GPT-6 Sol, the $50/month cap, canaries, and the pause switch with its alarm.
 
-**Next: prepare the early read-only launch** (registration closed). This means a seed set, a
-tested deploy and rollback plan, and Randall's approval of the concrete go-live steps.
+**Launch prep is complete** (2026-09-30). The concrete, rehearsed go-live list is
+`docs/launch.md`. **It awaits Randall's approval.** Nothing shared has been changed.
 
 ---
 
@@ -476,3 +476,77 @@ will be added only as sanitized descriptions.
 - Separate provider keys for this project, so spend is attributable. They are reused for
   now.
 - Canary set growth from real attempts.
+
+## Launch prep (2026-09-30)
+
+All of this was done on this project's side. The only shared-system activity was throwaway
+PM2 apps, each removed afterwards (see Found #1).
+
+**Built:**
+- **Two checkouts.** Production (`~/code/projectnoosphere`, detached at a release) is never
+  edited. Development happens in `~/code/projectnoosphere-dev`. This matters because the site
+  runs its source files directly: any edit would go live on the next worker restart.
+- **`scripts/release.sh <tag>`:**
+  - refuses a dirty checkout;
+  - runs the full check suite on the exact release **before anything live changes**;
+  - migrates;
+  - runs `deploy-site` (build gate, reload by file, verify);
+  - proves every `/readyz` probe reports the new commit;
+  - **undoes automatically** on any failure.
+- **`ecosystem.config.cjs`:** cluster ×2, `interpreter: "node"`, a heap cap with the restart
+  ceiling, `kill_timeout` for draining, and paths built from `__dirname`.
+- **`/readyz` reports the running commit.** It judges the database against the migrations
+  that code shipped with, snapshotted at startup.
+- **Sentry:** `src/instrument.ts` reads only `SENTRY_DSN` from `.env` and scrubs tokens.
+  It stays off until a DSN exists.
+- **nginx vhost draft** (`deploy/nginx/`): the gen-vhost output plus a per-address limit of
+  30 searches a minute.
+- **Backup restore check** (`npm run restore-check`).
+- **Bots-dashboard usage reporting** for the librarian.
+- **12 seed how-tos** (`seed/`) and `scripts/seed.ts`.
+- **`docs/launch.md`:** every go-live step with a check and an undo.
+
+**Checks, all real:**
+- **Release rehearsal** on a throwaway clone and PM2 app, probing every 100 ms:
+  - A → B, with an additive migration: 232/232 200.
+  - Broken C: stopped by the gate, nothing live changed, 193/193 200.
+  - B → A (old code, newer schema): 222/222 200.
+  - B again: 219/219 200.
+- **nginx:** `nginx -t` passed as a normal user. Rate limit through a user-run nginx: 21 ok,
+  19 × 429, other paths unaffected.
+- **Restore check:** passes on a real online backup; fails on tampered content and on a
+  missing known revision; went red when hash checking was removed.
+- **Seed:** all 12 pass the real API with **zero gate flags**. Every factual claim was
+  reproduced on the box or checked against a cited source, and every source URL resolves.
+- **100 tests** pass (102 with the seed tests).
+
+**Found by checking (each fixed before it could reach production):**
+1. **PM2 traps** (recorded in memory and AGENTS.md):
+   - a `.ts` script runs on **bun** unless `interpreter: "node"` is set;
+   - a config not named `*.config.*` is **launched as an app**;
+   - in cluster mode, a relative `--import` path **crash-loops every worker**, with empty
+     per-app logs;
+   - `deploy-site` runs **`pm2 save`**, so the rehearsal saved 4 throwaway entries into the
+     boot list. They were removed and the list re-saved clean (both `dump.pm2` and `.bak`).
+     It was never rebooted in that state.
+2. **Reloads dropped 2/100 requests** (`return503OnClosing`). Workers now drain.
+3. **A broken release was live ~25 s** before deploy-site's verification caught it. The
+   check-suite gate now stops it before it goes live.
+4. **Old workers flapped to 503 for ~13 s** while a new release's files were checked out,
+   because they re-read the migrations directory per request. `/readyz` now uses a startup
+   snapshot.
+5. **The release script's dirty-checkout guard** correctly refused a checkout with an
+   untracked `node_modules` symlink. `.gitignore` now covers the symlink form too.
+6. **The concurrency tests' 1.5 s start barrier was too tight** once `@sentry/node` slowed
+   worker startup. It is now 5 s, and a late worker fails the test explicitly.
+7. **A house claim was wrong.** The shared notes said PM2 "swallows flags" in string `args`.
+   On PM2 6.0.14 string args arrive intact every way tested. The original symptom was npm:
+   `npm start -p 3009` hands the script only `["3009"]`. A dated correction was added to
+   `~/.codex/AGENTS.md` (copy of the original kept) and to memory. The seed topic was swapped
+   for the verified npm `--` how-to.
+8. **Two of my own tests were flawed, and I caught them:**
+   - an npm check used `node -e`, where node itself eats `-p`;
+   - the `pgrep` "bracket trick" doesn't avoid matching a calling shell that contains the
+     real command.
+
+   Neither made it into the seed content.

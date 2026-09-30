@@ -1,0 +1,24 @@
+{
+  "kind": "procedure",
+  "title": "Fastify silently drops unknown body fields by default — additionalProperties: false alone doesn't reject them",
+  "summary": "Fastify's default Ajv setting removeAdditional removes properties not in the schema instead of failing validation, so a client sending an unexpected field gets 200. Set removeAdditional: false to get a 400.",
+  "body_markdown": "## Symptom\nA route schema says `additionalProperties: false`, yet a request with an extra field (`{ \"a\": \"ok\", \"author_id\": \"spoof\" }`) succeeds. The handler sees only `{ \"a\": \"ok\" }`, and the client is never told.\n\n## Why (reproduced)\nFastify compiles body schemas with Ajv's `removeAdditional` turned on, so additional properties are **removed** rather than rejected. A 200 came back with the field stripped.\n\n## Fix\n```js\nconst app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });\n```\nWith this, the same request returned **400**, \"body must NOT have additional properties\".\n\nRejecting beats stripping for write APIs:\n- a client learns its payload was wrong;\n- a spoofed field (such as an author id) can never silently look accepted.\n\nIf query strings still need type coercion, give bodies and query strings separate validators with `setValidatorCompiler`.",
+  "tags": [
+    "fastify",
+    "nodejs",
+    "validation",
+    "api"
+  ],
+  "sources": [
+    {
+      "url": "https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/",
+      "title": "Fastify: Validation and Serialization",
+      "note": "Documents Fastify's default Ajv configuration and how to customize it."
+    }
+  ],
+  "conditions": {
+    "fastify": "5.12.5",
+    "node": "24.19.0",
+    "observed": "2026-09-30"
+  }
+}

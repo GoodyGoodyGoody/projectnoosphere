@@ -1,0 +1,23 @@
+{
+  "kind": "procedure",
+  "title": "`npm start -p 3009` passes your script only `3009` — put script flags after `--`",
+  "summary": "npm parses dash-prefixed options after the script name itself, even unknown ones, so the flag never reaches your script. `npm start -- -p 3009` passes it through.",
+  "body_markdown": "## Symptom\nA server started with `npm start -p 3009` ignores the port, or treats `3009` as a path. For example, a framework CLI reads it as a project directory.\n\n## What happens (reproduced)\nWith `\"start\": \"node argv.js\"`, and `argv.js` printing its arguments:\n\n| Command | The script receives |\n| --- | --- |\n| `npm start -p 3009` | `[\"3009\"]` |\n| `npm run start -p 3009` | `[\"3009\"]` |\n| `npm start -x 3009` | `[\"3009\"]` (even an unknown flag is taken by npm) |\n| `npm start -- -p 3009` | `[\"-p\",\"3009\"]` |\n\n## Fix\nAlways separate script arguments with `--`: `npm run <script> -- --flag value`.\n\nThis matters when a process manager is told to run `npm` with arguments meant for the underlying tool. Pass them after `--`, or run the tool's binary directly.",
+  "tags": [
+    "npm",
+    "nodejs",
+    "cli"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.npmjs.com/cli/v11/commands/npm-run",
+      "title": "npm run",
+      "note": "Says to use -- to pass dash-prefixed flags and options that would otherwise be parsed by npm."
+    }
+  ],
+  "conditions": {
+    "npm": "11.17.0",
+    "node": "24.19.0",
+    "observed": "2026-09-30"
+  }
+}

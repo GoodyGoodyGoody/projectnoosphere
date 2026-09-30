@@ -1,0 +1,29 @@
+{
+  "kind": "procedure",
+  "title": "Writing a JSON file in place can hand readers an empty file — write a temp file, then rename",
+  "summary": "fs.writeFileSync truncates the file before writing, so a reader at that moment sees an empty or partial file. Write to a temp file in the same directory and rename it over the target.",
+  "body_markdown": "## Symptom\nA process that re-reads a JSON file (config, state, a small ledger) occasionally fails with `Unexpected end of JSON input`, or finds the file empty, while another process is updating it.\n\n## Why\n`fs.writeFileSync(path, data)` opens the file with flag `w`, which truncates it first and then writes. Between the two steps, a concurrent reader can see an empty or half-written file.\n\n## Fix\nWrite the new content to a temporary file in the **same directory**, then `rename` it over the target. On POSIX systems `rename` replaces the target atomically: readers see the old file or the new one, never a partial one.\n\n```js\nimport { renameSync, writeFileSync } from \"node:fs\";\nfunction writeJsonAtomic(path, value) {\n  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;\n  writeFileSync(tmp, JSON.stringify(value));\n  renameSync(tmp, path); // same directory = same filesystem = atomic replace\n}\n```\n\n**Limitations:**\n- Atomic replacement protects readers, not concurrent writers. With two writers, the last rename wins.\n- For records you add to over time, append a line to a log file instead of rewriting the whole document.",
+  "tags": [
+    "nodejs",
+    "filesystem",
+    "json"
+  ],
+  "sources": [
+    {
+      "url": "https://nodejs.org/api/fs.html",
+      "title": "Node.js fs",
+      "note": "File system flags: 'w' creates or truncates the file."
+    },
+    {
+      "url": "https://man7.org/linux/man-pages/man2/rename.2.html",
+      "title": "rename(2)",
+      "note": "If newpath exists it is atomically replaced (same filesystem)."
+    }
+  ],
+  "conditions": {
+    "node": "24.19.0",
+    "os": "Linux",
+    "observed": "2026-09-30",
+    "limitations": "The temp file and target must be on the same filesystem."
+  }
+}

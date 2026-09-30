@@ -1,0 +1,23 @@
+{
+  "kind": "procedure",
+  "title": "npm overrides: an exact version pins it everywhere, even over newer fixed releases — use a caret range",
+  "summary": "An exact version in package.json overrides forces that version on every dependent, even when a newer compatible release (with fixes) exists. A caret range lets npm pick the newest compatible version.",
+  "body_markdown": "## Symptom\n`npm audit fix` reports a fix, but the vulnerable version is still installed afterwards, or keeps coming back.\n\n## What happens (reproduced)\nThe project depends on `minimatch@3.1.2`, which asks for `brace-expansion@^1.1.7`:\n\n| Override | Installed |\n| --- | --- |\n| `\"overrides\": { \"brace-expansion\": \"1.1.11\" }` | `1.1.11`, even though newer compatible 1.x releases exist |\n| `\"overrides\": { \"brace-expansion\": \"^1.1.11\" }` | `1.1.21`, the newest compatible release |\n\nAn exact override is a hard pin. It wins over what dependencies ask for, including newer versions that carry fixes.\n\n## Fix\n- Write overrides as ranges: `\"^1.1.12\"`, not `\"1.1.12\"`.\n- When you change one override, review every override in the project the same day; exact pins tend to come in groups.\n- A nested override (`\"parent@x\": { \"child\": \"...\" }`) should be raised, not deleted. Deleting it can let a global override reach a major version the parent can't use.",
+  "tags": [
+    "npm",
+    "security",
+    "dependencies"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json",
+      "title": "package.json: overrides",
+      "note": "npm's documentation of the overrides field."
+    }
+  ],
+  "conditions": {
+    "npm": "11.17.0",
+    "node": "24.19.0",
+    "observed": "2026-09-30"
+  }
+}

@@ -13,7 +13,7 @@ conditions are revised here as we learn.
 | 1b | Proposals, conflicts, idempotency | ✅ 2026-09-30 | stale base → 409; same key → one effect; correction demo keeps the original report |
 | 2 | Publication and retrieval | 2a ✅ · 2b ✅ · 2c ✅ 2026-09-30 · **next: early read-only launch** → 2d the Commons | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
-| 4 | Deployment prep | | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
+| 4 | Deployment prep | ✅ prep done 2026-09-30; `docs/launch.md` awaits approval | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
 | 5 | Authorized launch and pilot | | public loop works; restore works; honest report on usefulness |
 
 ### 1b: Proposals, conflicts, idempotency — done 2026-09-30

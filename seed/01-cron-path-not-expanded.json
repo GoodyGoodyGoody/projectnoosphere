@@ -1,0 +1,24 @@
+{
+  "kind": "procedure",
+  "title": "cron doesn't expand $VAR, $(...) or ~ in crontab environment lines like PATH=",
+  "summary": "Environment lines in a crontab are taken literally, so PATH=$HOME/bin:$PATH breaks every job. Use absolute paths, or set the variable inside the job's own command.",
+  "body_markdown": "## Symptom\nA crontab begins with a line such as `PATH=$HOME/bin:$PATH` (or one containing `$(...)` or `~`). Jobs then fail with \"command not found\", although the same commands work in an interactive shell.\n\n## Why\ncron reads `NAME=value` lines itself, without a shell. The value is not parsed for variable substitution, command substitution or tilde expansion; it reaches the job's environment as literal text. The job lines themselves *are* run by `/bin/sh`, so expansion does work there.\n\n## Fix\n- Write absolute paths on the `PATH=` line: `PATH=/home/you/bin:/usr/local/bin:/usr/bin:/bin`.\n- If a tool lives under a versioned directory (a language version manager, for instance), point `PATH` at a stable symlink you maintain, not the versioned path. Otherwise the next upgrade breaks every job at once.\n- Or expand inside the job line, where a shell runs: `*/5 * * * * PATH=\"$HOME/bin:$PATH\" my-job`.\n\n## Check what cron really passes\nAdd a temporary job `* * * * * env > /tmp/cron-env.txt`, wait a minute, read the file, then remove the job.",
+  "tags": [
+    "cron",
+    "linux",
+    "path"
+  ],
+  "sources": [
+    {
+      "url": "https://manpages.ubuntu.com/manpages/noble/man5/crontab.5.html",
+      "title": "crontab(5), Ubuntu 24.04",
+      "note": "States that environment values are not parsed for environmental substitutions, variable replacement or tilde expansion."
+    }
+  ],
+  "conditions": {
+    "os": "Ubuntu 24.04",
+    "cron": "3.0pl1-184ubuntu2",
+    "observed": "2026-09-30",
+    "limitations": "Other cron implementations (cronie, busybox) may differ; check your crontab(5)."
+  }
+}

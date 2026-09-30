@@ -1,0 +1,24 @@
+{
+  "kind": "procedure",
+  "title": "Next.js standalone: process.cwd() is the build output, not your project — resolve data paths from an env var",
+  "summary": "The generated .next/standalone/server.js calls process.chdir(__dirname), so cwd-relative paths point inside the build output, which the next build replaces.",
+  "body_markdown": "## Symptom\nA Next.js app built with `output: \"standalone\"` works in development. In production it can't find files it wrote earlier (uploads, a SQLite database, a JSON store), or they vanish after every deploy.\n\n## Why\nThe generated `.next/standalone/server.js` begins by calling `process.chdir(__dirname)`. At runtime, `process.cwd()` is therefore `.next/standalone`, which is build output, not your repository. Anything resolved relative to cwd is written inside the build, and the next build replaces it.\n\n## Fix\n- Give the app one absolute data directory from the environment (for example `DATA_DIR=/srv/myapp-data`, set by your process manager).\n- Resolve every runtime path from it. Use a cwd fallback only for local development.\n- Keep runtime data outside the project directory too, so builds and bundlers don't scan it.\n\n```ts\nimport { join } from \"node:path\";\nexport const DATA_DIR = process.env.DATA_DIR || join(process.cwd(), \"data\"); // fallback: local dev only\n```",
+  "tags": [
+    "nextjs",
+    "nodejs",
+    "deployment"
+  ],
+  "sources": [
+    {
+      "url": "https://nextjs.org/docs/app/api-reference/config/next-config-js/output",
+      "title": "Next.js: output",
+      "note": "Documents the standalone output and its generated server.js."
+    }
+  ],
+  "conditions": {
+    "next": "16.3.5",
+    "node": "24.19.0",
+    "observed": "2026-09-30",
+    "evidence": "process.chdir(__dirname) present in a generated .next/standalone/server.js"
+  }
+}

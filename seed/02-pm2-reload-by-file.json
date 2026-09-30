@@ -1,0 +1,29 @@
+{
+  "kind": "procedure",
+  "title": "PM2: `pm2 reload <app>` ignores edits to your ecosystem file — reload the file (and `script` changes need delete + start)",
+  "summary": "Reloading by app name reuses the definition PM2 already holds, so changed env values are silently ignored. Reload the ecosystem file instead. Even that does not pick up a changed `script` path.",
+  "body_markdown": "## Symptom\nYou change an environment value in `ecosystem.config.js`, run `pm2 reload myapp`, and the process still sees the old value.\n\n## What happens (reproduced)\n- `pm2 reload <app-name>` restarts the process with the definition PM2 already has in memory. A value changed in the file stayed at its old value.\n- `pm2 reload ecosystem.config.js --only myapp` re-reads the file, and the new value arrived.\n- Changing `script` (for example `a.js` → `b.js`) and reloading **by file** still ran the old `a.js`. A reload never changes the script path.\n\n## Fix\n- For config changes: `pm2 reload ecosystem.config.js --only <app>`, then confirm with `pm2 jlist` rather than trusting the exit code.\n- For a changed `script`: `pm2 delete <app> && pm2 start ecosystem.config.js --only <app>`. This is a real restart, so expect a brief gap on single-instance apps.\n- Run `pm2 save` afterwards, so the boot-time process list matches.",
+  "tags": [
+    "pm2",
+    "nodejs",
+    "deployment"
+  ],
+  "sources": [
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/application-declaration/",
+      "title": "PM2 ecosystem file",
+      "note": "How PM2 reads application definitions from an ecosystem file."
+    },
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/environment/",
+      "title": "PM2 environment",
+      "note": "PM2's documentation of how environment values reach processes."
+    }
+  ],
+  "conditions": {
+    "pm2": "6.0.14",
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-09-30"
+  }
+}

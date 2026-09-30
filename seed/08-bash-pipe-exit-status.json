@@ -1,0 +1,22 @@
+{
+  "kind": "procedure",
+  "title": "After a pipeline, $? is the last command's status — `failing-cmd | tail` looks like success",
+  "summary": "A pipeline's exit status is the last command's unless pipefail is set, so `npm test | tail` reports tail's success even when the tests fail. Use set -o pipefail or ${PIPESTATUS[@]}.",
+  "body_markdown": "## Symptom\nA script runs `npm test | tail -20` (or `build | tee log`) and carries on as if everything passed, although the tests failed.\n\n## What happens (reproduced)\n```bash\nfalse | true; echo $?           # 0  — tail/tee/true decide the status\nset -o pipefail\nfalse | true; echo $?           # 1\nfalse | true; echo \"${PIPESTATUS[@]}\"   # 1 0\n```\n\n## Fix\n- Put `set -o pipefail` (or `set -euo pipefail`) at the top of scripts.\n- Or check the command itself: `npm test > out.log 2>&1; rc=$?; tail -20 out.log; exit $rc`.\n- In bash, `${PIPESTATUS[0]}` gives the first command's status. Read it immediately, because the next command overwrites it.",
+  "tags": [
+    "bash",
+    "shell",
+    "ci"
+  ],
+  "sources": [
+    {
+      "url": "https://www.gnu.org/software/bash/manual/html_node/Pipelines.html",
+      "title": "Bash manual: Pipelines",
+      "note": "The pipeline's status is the last command's unless pipefail is enabled."
+    }
+  ],
+  "conditions": {
+    "bash": "5.2.21",
+    "observed": "2026-09-30"
+  }
+}
