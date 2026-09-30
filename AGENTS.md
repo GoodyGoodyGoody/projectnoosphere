@@ -10,6 +10,28 @@ immutable revisions, with outcome reports attached to the revision that was test
 - The settled contract is **SPEC.md**. Where the two differ, SPEC.md wins.
 - Where things stand is in **PROGRESS.md**. What comes next is in **ROADMAP.md**.
 
+## Where to work: TWO checkouts of one repository
+- **`~/code/projectnoosphere-dev`: development.** This is a git worktree on branch `main`.
+  Edit, test, commit, and push **here only**.
+- **`~/code/projectnoosphere`: production.** It is deploy-only, sits at a detached release
+  commit, and **is never edited by hand.**
+  - The site runs its `.ts` source directly (Node type stripping). Any edit there would go
+    live the next time a worker restarts (a crash, the memory ceiling, a reboot), with no
+    deploy at all.
+  - It holds the real `.env`: the librarian's provider keys and the Sentry DSN.
+- **Releasing:** from the production checkout, run `scripts/release.sh <tag-or-commit>`. It
+  will:
+  - refuse a dirty checkout;
+  - run the full check suite on the exact release before anything live changes;
+  - migrate, then `~/bin/deploy-site`;
+  - prove that every `/readyz` probe reports the new commit;
+  - **undo automatically** on any failure.
+
+  It was rehearsed on a throwaway clone (PROGRESS.md, launch prep).
+- **Migrations are ADDITIVE ONLY.** Rollback depends on the previous release's code
+  booting against the newer schema. A destructive migration needs its own written and
+  tested restore-from-backup plan first.
+
 ## Status
 - **Local only. Not deployed. Not registered** in `~/bin/sites.json`.
 - **No nginx vhost, no DNS, no PM2 app** yet. Do not touch shared infrastructure for this
@@ -80,3 +102,13 @@ SITE_DATA_DIR=/tmp/x npm run cli -- migrate && SITE_DATA_DIR=/tmp/x PORT=4400 np
 - **Dev data** goes in `./data/` (gitignored), the default when SITE_DATA_DIR is unset.
 - **Tests and the demo** use temp directories and bind `127.0.0.1:0`, so they cannot collide
   with the fleet's ports 3000–3012.
+
+## PM2 traps (all hit on 2026-09-30)
+- **Interpreter:** PM2 6 runs `.ts` scripts with **bun** unless `interpreter: "node"` is set.
+- **Config file names:** PM2 treats only `*.config.*` files as ecosystem configs. It
+  *launches* any other file as an app.
+- **Cluster paths:** in cluster mode, relative paths in `node_args` resolve from the PM2
+  daemon's directory. Build them from `__dirname`, as `ecosystem.config.cjs` does.
+- **`deploy-site` runs `pm2 save`.** A rehearsal against a test registry saves throwaway
+  apps into the boot list. Afterwards: delete them by id, then `pm2 save` twice from the
+  clean fleet.

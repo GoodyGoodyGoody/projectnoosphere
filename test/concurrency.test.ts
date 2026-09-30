@@ -11,14 +11,18 @@ const WORKER = join(import.meta.dirname, "fixtures", "inject-worker.ts");
 // Separate OS processes on one SQLite file, released at the same instant —
 // the situation PM2 cluster mode creates. In-process tests cannot show this.
 async function race(dbPath: string, requests: object[], holdMs = 0) {
-  const startAt = Date.now() + 1500;
+  // Each process needs ~0.75 s to load the app alone, far more when the whole
+  // suite runs in parallel; 1.5 s once proved too tight (2026-09-30).
+  const startAt = Date.now() + 5000;
   const env = { ...process.env, HOLD_MS: String(holdMs) };
   const outs = await Promise.all(
     requests.map((r) =>
       run(process.execPath, [WORKER, dbPath, String(startAt), JSON.stringify(r)], { timeout: 20_000, env }),
     ),
   );
-  return outs.map((o) => JSON.parse(o.stdout) as { status: number; body: any; replayed: string | null; elapsedMs: number });
+  const results = outs.map((o) => JSON.parse(o.stdout) as { status: number; body: any; replayed: string | null; elapsedMs: number; late: boolean });
+  assert.ok(results.every((r) => !r.late), "a worker started after the shared start time; the race did not happen");
+  return results;
 }
 
 // Proof the race happened: with each transaction held HOLD ms, requests that

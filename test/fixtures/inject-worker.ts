@@ -14,6 +14,9 @@ const hold = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 
 const app = buildApp({ db, ...(holdMs > 0 ? { testHooks: { idempotencyAfterLookup: hold } } : {}) });
 await app.ready();
 const wait = Number(startAt) - Date.now();
+// Arriving after the start time means this process could not overlap with the
+// others; the test must fail on that plainly, not as a confusing race result.
+const late = wait <= 0;
 if (wait > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
 const t0 = Date.now();
 const res = await app.inject(JSON.parse(requestJson));
@@ -24,6 +27,7 @@ process.stdout.write(
     body: res.json(),
     replayed: res.headers["idempotent-replayed"] ?? null,
     elapsedMs,
+    late,
   }),
 );
 await app.close();

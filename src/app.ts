@@ -1,5 +1,6 @@
 import { Ajv, type ErrorObject } from "ajv";
 import swagger from "@fastify/swagger";
+import * as Sentry from "@sentry/node";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
 import { migrationNames, pendingMigrations, schemaVersion, type DB } from "./db.ts";
@@ -205,8 +206,9 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (status >= 400 && status < 500) {
       return sendError(reply, req, new ApiError(status, "bad_request", "malformed request"));
     }
-    // Internal details go to the log, never to the client.
+    // Internal details go to the log and Sentry (when configured), never to the client.
     req.log.error({ err }, "unhandled error");
+    Sentry.captureException(err, { tags: { request_id: req.id } });
     return sendError(reply, req, new ApiError(500, "internal_error", "internal error"));
   });
 
