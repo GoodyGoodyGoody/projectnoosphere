@@ -4,18 +4,32 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
 import { pendingMigrations, schemaVersion, type DB } from "./db.ts";
-import { ApiError, type FieldError } from "./errors.ts";
+import { ApiError, invalid, type FieldError } from "./errors.ts";
+import { withIdempotency, type TestHooks, type WriteResult } from "./idempotency.ts";
 import { newId } from "./ids.ts";
 import { createAnnotation, getAnnotation, listAnnotations } from "./modules/annotations.ts";
-import { createRecord, getRecord, getRevision, listRevisions, recordUrl } from "./modules/records.ts";
+import { approveAnnotation, publishRevision } from "./modules/moderation.ts";
+import {
+  createRecord,
+  getRecord,
+  getRevision,
+  listRevisions,
+  proposeRevision,
+  recordUrl,
+  revisionUrl,
+} from "./modules/records.ts";
 import {
   annotationInputSchema,
   annotationListQuerySchema,
   LIMITS,
+  moderationInputSchema,
   pageQuerySchema,
   params,
+  proposalInputSchema,
   revisionInputSchema,
   type AnnotationInput,
+  type ModerationInput,
+  type ProposalInput,
   type RevisionInput,
 } from "./schemas.ts";
 
@@ -30,6 +44,7 @@ export interface AppOptions {
   logger?: boolean | Record<string, unknown>;
   // SPDX id recorded on (and hashed into) every revision. ADR 0004.
   contentLicense?: string;
+  testHooks?: TestHooks;
 }
 
 // Contributed knowledge is dedicated to the public domain: the least restrictive
@@ -70,6 +85,7 @@ function sendError(reply: FastifyReply, req: FastifyRequest, err: ApiError) {
       code: err.code,
       message: err.message,
       ...(err.fields ? { fields: err.fields } : {}),
+      ...(err.details ? { details: err.details } : {}),
       request_id: req.id,
     },
   });
@@ -144,6 +160,23 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     return req.actor;
   };
 
+  // Every authenticated write goes through here: optional Idempotency-Key replay,
+  // Location for created resources, and an explicit replay marker.
+  const write = (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    operation: string,
+    request: unknown,
+    run: () => WriteResult,
+  ) => {
+    const key = req.headers["idempotency-key"];
+    if (Array.isArray(key)) throw invalid("Idempotency-Key", "send exactly one key");
+    const result = withIdempotency(db, actorOf(req), operation, key, request, run, opts.testHooks);
+    if (result.location) reply.header("location", result.location);
+    if (result.replayed) reply.header("idempotent-replayed", "true");
+    return reply.code(result.status).send(result.body);
+  };
+
   // ---- operational --------------------------------------------------------
 
   app.get("/healthz", async () => ({ status: "ok" }));
@@ -168,13 +201,31 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.post<{ Body: RevisionInput }>(
     "/api/v1/records",
     { schema: { body: revisionInputSchema }, onRequest: authed("contribute") },
-    async (req, reply) => {
-      const { recordId, revisionId } = createRecord(db, actorOf(req), req.body, { contentLicense });
-      return reply
-        .code(201)
-        .header("location", recordUrl(recordId))
-        .send({ ...getRecord(db, recordId), created_revision: getRevision(db, revisionId).revision });
-    },
+    async (req, reply) =>
+      write(req, reply, "records.create", { body: req.body }, () => {
+        const { recordId, revisionId } = createRecord(db, actorOf(req), req.body, { contentLicense });
+        return {
+          status: 201,
+          location: recordUrl(recordId),
+          body: { ...getRecord(db, recordId), created_revision: getRevision(db, revisionId).revision },
+        };
+      }),
+  );
+
+  app.post<{ Params: { record_id: string }; Body: ProposalInput }>(
+    "/api/v1/records/:record_id/revisions",
+    { schema: { params: params.record, body: proposalInputSchema }, onRequest: authed("contribute") },
+    async (req, reply) =>
+      write(req, reply, "revisions.propose", { record_id: req.params.record_id, body: req.body }, () => {
+        const { revisionId } = proposeRevision(db, actorOf(req), req.params.record_id, req.body, {
+          contentLicense,
+        });
+        return {
+          status: 201,
+          location: revisionUrl(revisionId),
+          body: { revision: getRevision(db, revisionId).revision, record: getRecord(db, req.params.record_id).record },
+        };
+      }),
   );
 
   app.get<{ Params: { record_id: string } }>(
@@ -200,10 +251,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.post<{ Params: { revision_id: string }; Body: AnnotationInput }>(
     "/api/v1/revisions/:revision_id/annotations",
     { schema: { params: params.revision, body: annotationInputSchema }, onRequest: authed("contribute") },
-    async (req, reply) => {
-      const { annotationId } = createAnnotation(db, actorOf(req), req.params.revision_id, req.body);
-      return reply.code(201).send({ annotation: getAnnotation(db, annotationId) });
-    },
+    async (req, reply) =>
+      write(req, reply, "annotations.create", { revision_id: req.params.revision_id, body: req.body }, () => {
+        const { annotationId } = createAnnotation(db, actorOf(req), req.params.revision_id, req.body);
+        return { status: 201, body: { annotation: getAnnotation(db, annotationId) } };
+      }),
   );
 
   app.get<{
@@ -217,6 +269,26 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         limit: req.query.limit,
         ...(req.query.cursor ? { cursor: req.query.cursor } : {}),
         includeCandidate: req.query.include === "candidate",
+      }),
+  );
+
+  // ---- moderation (steward scope: 'moderate') ------------------------------
+  // Changes review state and the published pointer, never content. The caller
+  // is a steward — in production the librarian bot (ADR 0005).
+
+  app.post<{ Body: ModerationInput }>(
+    "/api/v1/admin/moderation-events",
+    { schema: { body: moderationInputSchema }, onRequest: authed("moderate") },
+    async (req, reply) =>
+      write(req, reply, "moderation.create", { body: req.body }, () => {
+        const { action, target_id, reason } = req.body;
+        const actor = actorOf(req);
+        if (action === "publish_revision") {
+          if (!target_id.startsWith("rev_")) throw invalid("target_id", "publish_revision targets a revision");
+          return { status: 201, body: { event: publishRevision(db, actor, target_id, reason) } };
+        }
+        if (!target_id.startsWith("ann_")) throw invalid("target_id", "approve_annotation targets an annotation");
+        return { status: 201, body: { event: approveAnnotation(db, actor, target_id, reason) } };
       }),
   );
 

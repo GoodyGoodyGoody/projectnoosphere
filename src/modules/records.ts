@@ -1,9 +1,9 @@
 import type { Actor } from "../auth.ts";
 import type { DB } from "../db.ts";
-import { invalid, notFound } from "../errors.ts";
+import { conflict, invalid, notFound } from "../errors.ts";
 import { revisionHash, REVISION_HASH_SCHEMA } from "../hash.ts";
 import { newId } from "../ids.ts";
-import type { RevisionInput, SourceRef } from "../schemas.ts";
+import type { ProposalInput, RevisionInput, SourceRef } from "../schemas.ts";
 import { nowIso } from "../time.ts";
 
 // ---- trust notice -----------------------------------------------------------
@@ -103,6 +103,59 @@ export function createRecord(
         created_at: now,
       });
       return { recordId, revisionId };
+    })
+    .immediate();
+}
+
+// Proposes a new candidate revision of an existing record. The client states the
+// published revision it edited (base_revision_id; null if nothing is published).
+// If the pointer has moved since, the proposal is refused with a 409 naming the
+// current revision: newer work is never silently replaced.
+export function proposeRevision(
+  db: DB,
+  actor: Actor,
+  recordId: string,
+  input: ProposalInput,
+  opts: CreateRecordOptions,
+): { revisionId: string } {
+  const { base_revision_id, parent_revision_id, ...content } = input;
+  checkRevisionInput(db, content);
+  return db
+    .transaction(() => {
+      const rec = db.prepare("SELECT current_revision_id FROM records WHERE id = ?").get(recordId) as
+        | { current_revision_id: string | null }
+        | undefined;
+      if (!rec) throw notFound("record");
+      if (rec.current_revision_id !== base_revision_id) {
+        throw conflict(
+          "stale_base",
+          "base_revision_id is not the record's current published revision; " +
+            "re-read the current revision and propose against it",
+          { current_revision_id: rec.current_revision_id, your_base_revision_id: base_revision_id },
+        );
+      }
+      if (parent_revision_id) {
+        const parent = db.prepare("SELECT record_id FROM revisions WHERE id = ?").get(parent_revision_id) as
+          | { record_id: string }
+          | undefined;
+        if (!parent || parent.record_id !== recordId) {
+          throw invalid("parent_revision_id", "must be a revision of this same record");
+        }
+      }
+      const revisionId = newId("rev");
+      const now = nowIso();
+      insertRevision(db, {
+        id: revisionId,
+        record_id: recordId,
+        base_revision_id,
+        parent_revision_id: parent_revision_id ?? null,
+        author_id: actor.contributorId,
+        input: content,
+        content_license: opts.contentLicense,
+        created_at: now,
+      });
+      db.prepare("UPDATE records SET updated_at = ? WHERE id = ?").run(now, recordId);
+      return { revisionId };
     })
     .immediate();
 }

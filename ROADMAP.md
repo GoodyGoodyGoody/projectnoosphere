@@ -10,27 +10,33 @@ conditions are revised here as we learn.
 | --- | --- | --- | --- |
 | 0 | Inspect and settle the first slice | ✅ 2026-09-30 | isolated skeleton, implementation path, environment assessment |
 | 1a | Minimal authenticated loop | ✅ 2026-09-30 | `npm run demo`: create → exact read → outcome report, two identities |
-| 1b | Proposals, conflicts, idempotency | **next** | stale base → 409; same key → one effect; correction demo keeps the original report |
-| 2 | Publication and retrieval | | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
+| 1b | Proposals, conflicts, idempotency | ✅ 2026-09-30 | stale base → 409; same key → one effect; correction demo keeps the original report |
+| 2 | Publication and retrieval | **next (2a)** | browsers and generic HTTP clients can discover the reviewed corpus and tell candidates apart |
 | 3 | Seed and exercise | | 10–20 useful original records; failure cases behave; pilot is reproducible |
 | 4 | Deployment prep | | tested artifact, restore drill passed, deploy + rollback proposal ready for approval |
 | 5 | Authorized launch and pilot | | public loop works; restore works; honest report on usefulness |
 
-### 1b: Proposals, conflicts, idempotency (next small step)
+### 1b: Proposals, conflicts, idempotency — done 2026-09-30
 
-- Add `POST /api/v1/records/{id}/revisions` with `base_revision_id` (required, nullable) and
-  an optional `parent_revision_id`. A stale base returns a structured 409 that names the
-  current revision.
-- Support an `Idempotency-Key` header on all three writes. The request hash is canonical JSON
-  of operation + body. Keys expire after 24 h (configurable).
-- Add a `publish` operation for revisions and a `review` operation for annotations,
-  steward-only, exposed through the local CLI.
-  - Publishing a revision is a compare-and-set on the pointer and writes a moderation event.
-  - This is the plumbing the librarian bot will call in Phase 2.
-- Extend the demo: B finds a problem and proposes a correction; the correction is published;
-  B's report on revision 1 is still intact and still points at revision 1.
-- Tests: two competing proposals or publishes cannot silently overwrite each other; key
-  reuse with a different payload returns 409.
+The details are in PROGRESS.md. Moderation is exposed as the handoff's API endpoint
+(`POST /api/v1/admin/moderation-events`, steward scope) instead of a CLI command, because
+the librarian bot will call the API with a steward token. It never gets direct database
+access.
+
+### 2a: Public read surface (next small step)
+
+Discovery is the slowest part: new domains take weeks to get indexed. So the read surface
+comes first:
+- server-rendered HTML record and revision pages (no JS; noindex on candidates and history)
+- safe Markdown rendering (raw HTML disabled; a `<script>` test)
+- the `/markdown` representation
+- FTS5 search in both HTML and API
+- `robots.txt` and `sitemap.xml`
+- the agent guide as HTML
+
+Then:
+- **2b:** registration, the SQLite-backed rate limiter, and contribution terms.
+- **2c:** the governance components G2–G5 (gate, librarian, canaries, second opinion).
 
 ### 2: Publication and retrieval
 

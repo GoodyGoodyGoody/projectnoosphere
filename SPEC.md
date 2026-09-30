@@ -3,7 +3,7 @@
 **Status:** living document. It records what is **settled** and what is **implemented**.
 - The source brief is the handoff in `docs/handoff/Project_Noosphere_Claude_Plan.md`.
 - Where this file and the handoff disagree, this file wins, and the deviation is listed in §10.
-- Last updated: 2026-09-30 (Milestone 1a).
+- Last updated: 2026-09-30 (Milestone 1b — Phase 1 complete).
 
 Legend: ✅ implemented and tested · 🔜 settled but not yet built · 📝 open decision
 
@@ -37,8 +37,8 @@ disagreement.
 | revision_review ✅ | yes | review state lives apart from content |
 | annotation ✅ | **never** (trigger) | tied to one exact revision |
 | annotation_review ✅ | yes | |
-| moderation_event 🔜 | **never** (trigger) | append-only audit; the table exists, the API comes in Phase 2 |
-| idempotency_key 🔜 | expires | the table exists; handling comes in 1b |
+| moderation_event ✅ | **never** (trigger) | append-only audit, written in the same transaction as the change it records |
+| idempotency_key ✅ | expires (24 h) | per contributor + operation; stores the original 2xx response |
 
 The following are closed enumerations. Changing one is a deliberate migration.
 - **Revision kinds:** observation, claim, hypothesis, procedure, experiment_result, synthesis.
@@ -68,14 +68,31 @@ Two review states are easy to confuse:
    be a revision of the same record (triggers).
 6. ✅ Quarantined content is withheld through one representation function. Every JSON output
    inherits that rule: revision, record, history, and annotations.
-7. 🔜 **Stale base.** Proposing a revision requires `base_revision_id`, which must equal the
-   current published pointer (null when nothing is published). A mismatch returns a
-   structured 409.
-8. 🔜 **Publishing is a compare-and-set.** It uses
-   `UPDATE records SET current_revision_id=? WHERE id=? AND current_revision_id IS ?`
+7. ✅ **Stale base.** Proposing a revision requires `base_revision_id`, which must equal the
+   current published pointer (null when nothing is published).
+   - A mismatch returns 409 `stale_base`, with `details.current_revision_id` so the client
+     can re-read and re-propose.
+   - An optional `parent_revision_id` must belong to the same record.
+8. ✅ **Publishing is a compare-and-set.** It uses
+   `UPDATE records SET current_revision_id=? WHERE id=? AND current_revision_id IS <candidate's base>`
    inside an IMMEDIATE transaction.
-9. 🔜 **Idempotency.** The same key with the same payload returns the original response. The
-   same key with a different payload returns 409.
+   - A candidate whose base is no longer current gets a 409 `stale_base`. It must be
+     re-proposed and reviewed again.
+   - Only candidates can be published (otherwise 409 `not_candidate`).
+   - Publishing never changes content. The previous revision stays `reviewed`, with
+     `is_current_published: false`.
+   - This holds across processes: three OS processes racing to publish three candidates
+     produce exactly one winner (tested).
+9. ✅ **Idempotency** (`Idempotency-Key` header, 1–200 visible ASCII characters). It covers
+   every authenticated write and is scoped per contributor and per operation.
+   - The same key with the same request replays the original response, with the header
+     `Idempotent-Replayed: true`.
+   - The same key with a different request returns 409 `idempotency_key_reused`.
+   - Only 2xx results are stored, so a request that failed can be corrected and retried
+     with the same key.
+   - The lookup, the write, and the stored response share one IMMEDIATE transaction, so
+     three processes sending one key at once produce one effect (tested with forced
+     overlap).
 
 ## 5. Content hash ✅
 
@@ -131,14 +148,17 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | `GET /api/v1/revisions/{revision_id}` | none | ✅ exact revision with review_state, links, and trust notice |
 | `GET /api/v1/revisions/{revision_id}/annotations` | none | ✅ reviewed only; `?include=candidate` adds labeled candidates |
 | `POST /api/v1/revisions/{revision_id}/annotations` | contribute | ✅ 201; 404 when the revision is unknown or quarantined |
-| `POST /api/v1/records/{record_id}/revisions` | contribute | 🔜 1b: proposal with `base_revision_id`; 409 when stale |
-| `GET /api/v1/revisions/{id}/markdown`, search, HTML pages, sitemap, OpenAPI, registration, admin | | 🔜 Phase 2 |
+| `POST /api/v1/records/{record_id}/revisions` | contribute | ✅ proposes a candidate with `base_revision_id` (required, nullable); 409 `stale_base` when stale |
+| `POST /api/v1/admin/moderation-events` | **moderate** | ✅ `{action, target_id, reason}`; actions `publish_revision` and `approve_annotation`; 409 `stale_base` / `not_candidate` |
+| `GET /api/v1/revisions/{id}/markdown`, search, HTML pages, sitemap, OpenAPI, registration, review queue, quarantine/reject | | 🔜 Phase 2 |
 
 **Pagination.** `limit` is 1–50 (default 20). `cursor` is the last id seen, and results are in
 ULID (creation) order. A response includes `next_cursor`, or null.
 
 **Errors.** Every error has the shape
-`{"error":{"code","message","fields"?:[{"path","message","location"}],"request_id"}}`.
+`{"error":{"code","message","fields"?:[{"path","message","location"}],"details"?,"request_id"}}`.
+- `details` carries facts a client can act on, e.g. the current revision id on a 409.
+- The 409 codes are `stale_base`, `not_candidate`, and `idempotency_key_reused`.
 - Requests carry an `x-request-id` header, which is always server-generated.
 - 500 responses never include internal details.
 

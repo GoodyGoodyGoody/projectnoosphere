@@ -180,3 +180,46 @@ export const params = {
     properties: { revision_id: { type: "string", pattern: ID_PATTERN.revision } },
   },
 } as const;
+
+// A proposed revision: the revision fields plus the lineage the client assumed.
+// base_revision_id is REQUIRED (null when the record has no published revision):
+// the client must say which published version it edited, so a stale edit is a
+// 409 instead of silently replacing newer work.
+const nullableRevisionId = {
+  anyOf: [{ type: "string", pattern: ID_PATTERN.revision }, { type: "null" }],
+} as const;
+
+export const proposalInputSchema = {
+  ...revisionInputSchema,
+  required: [...revisionInputSchema.required, "base_revision_id"],
+  properties: {
+    ...revisionInputSchema.properties,
+    base_revision_id: nullableRevisionId,
+    parent_revision_id: { type: "string", pattern: ID_PATTERN.revision },
+  },
+} as const;
+
+export interface ProposalInput extends RevisionInput {
+  base_revision_id: string | null;
+  parent_revision_id?: string;
+}
+
+export const MODERATION_ACTIONS = ["publish_revision", "approve_annotation"] as const;
+export type ModerationAction = (typeof MODERATION_ACTIONS)[number];
+
+export const moderationInputSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["action", "target_id", "reason"],
+  properties: {
+    action: { type: "string", enum: MODERATION_ACTIONS },
+    target_id: { type: "string", pattern: "^(rev|ann)_[0-9A-HJKMNP-TV-Z]{26}$" },
+    reason: { type: "string", minLength: 1, maxLength: 2000 },
+  },
+} as const;
+
+export interface ModerationInput {
+  action: ModerationAction;
+  target_id: string;
+  reason: string;
+}

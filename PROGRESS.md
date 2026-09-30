@@ -2,11 +2,15 @@
 
 ## Current state — 2026-09-30
 
-**Milestones 0 and 1a are complete.** The local authenticated loop works end to end. Nothing
-is deployed and no shared droplet infrastructure has been touched.
+**Phase 1 is complete (milestones 0, 1a, 1b).** The full local contribution loop works end to
+end, including corrections, stale-edit conflicts, safe retries, and publication by a
+steward. Nothing is deployed, and no shared droplet infrastructure has been touched.
 
-**Next small step: Milestone 1b** (ROADMAP.md): revision proposals with a `base_revision_id`
-409, `Idempotency-Key`, a steward `publish` via compare-and-set, and a correction demo.
+**Governance is settled in principle** (ADR 0005): bots run review and humans observe. The
+charter draft (`docs/charter.md`) awaits Randall's approval.
+
+**Next small step: 2a, the public read surface** (ROADMAP.md): HTML pages, safe Markdown,
+search, sitemap.
 
 ---
 
@@ -106,3 +110,58 @@ then restored.
   with the 1b competing-publish test.
 - **Two scripted identities are not independent agents.** The demo proves protocol
   correctness only.
+
+## Milestone 1b — proposals, conflicts, idempotency (2026-09-30)
+
+### What works
+- **`POST /api/v1/records/{id}/revisions`.** A proposal must state `base_revision_id` (null
+  when nothing is published). A stale base returns 409 `stale_base` with
+  `details.current_revision_id`.
+- **`POST /api/v1/admin/moderation-events`** (steward scope): `publish_revision` is a
+  compare-and-set on the pointer, and `approve_annotation` approves an annotation. Every
+  decision writes an append-only event in the same transaction.
+- **`Idempotency-Key`** on every write: replay, 409 on reuse, per contributor and per
+  operation, 24 h expiry, only 2xx results stored.
+- **`npm run demo`** now tells the whole story: find → verify → report → publish → B's
+  correction (retried safely) → publish → A's stale edit refused (409) → C sees rev2 current,
+  rev1 intact (hash ✓), and B's report still on rev1 with none on rev2.
+
+### Checks performed (real output)
+- `npm run check` exits 0.
+- **39/39 tests** pass across 6 suites in ~7.4 s.
+- The new suites cover proposals, idempotency, and **cross-process concurrency**. Separate
+  OS processes, each with its own app and its own connection to one SQLite file (like PM2
+  cluster workers), run three rounds of three-way publish races: exactly one winner each
+  round. Three simultaneous same-key creates produce one record, and two of the three
+  responses are replays.
+
+**Mutation checks** (each gate was shown red):
+
+| Mutation | Went red |
+| --- | --- |
+| Publish without the compare-and-set | the in-process and cross-process race tests |
+| Proposal ignores a stale base | the stale-base tests |
+| Replay ignores a payload mismatch | the key-reuse 409 test |
+| Idempotency results never stored | the replay and parallel-retry tests |
+| Idempotency in a DEFERRED transaction | the parallel-retry test, **but only after a fix**; see below |
+
+### Found by checking
+- **The first cross-process test passed by timing luck.** Weakening the idempotency
+  transaction to DEFERRED left it green: each transaction takes about 1 ms, so the three
+  processes never actually overlapped.
+- Fix: a test hook (`testHooks.idempotencyAfterLookup`, unset in production) holds each
+  transaction open for 300 ms after its lookup, forcing real overlap. With it, the DEFERRED
+  mutation fails, and the real IMMEDIATE code passes.
+- Lesson: a race test must *prove* the race happened.
+
+### Decisions
+- Moderation is an API endpoint rather than a CLI command. The librarian bot will act
+  through the API with a steward token and never touch the database directly.
+
+### Unresolved / limitations
+- There is no reject or quarantine action and no review-queue listing yet (Phase 2c
+  governance).
+- There is no registration and no rate limiting yet (2b).
+- A candidate that loses a race stays `candidate` forever unless re-proposed. The librarian
+  (2c) should mark such candidates `superseded`, with a reason.
+- Expired idempotency rows are pruned lazily, on the next stored write.

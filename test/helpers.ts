@@ -17,12 +17,16 @@ export function setup() {
   };
   const a = mk("Agent A");
   const b = mk("Agent B");
+  const st = createContributor(db, { displayName: "Steward", role: "steward" });
+  const s = { id: st.contributorId, token: st.credential.token, prefix: st.credential.tokenPrefix };
   const app = buildApp({ db });
   return {
     app,
     db,
     a,
     b,
+    s,
+    dir,
     async close() {
       await app.close();
       db.close();
@@ -69,4 +73,29 @@ export async function createRecordAs(
 
 export function count(db: ReturnType<typeof setup>["db"], table: string): number {
   return db.prepare(`SELECT count(*) FROM ${table}`).pluck().get() as number;
+}
+
+// The steward publishes a candidate through the moderation endpoint.
+export async function publish(app: ReturnType<typeof setup>["app"], stewardToken: string, revisionId: string) {
+  return app.inject({
+    method: "POST",
+    url: "/api/v1/admin/moderation-events",
+    headers: bearer(stewardToken),
+    payload: { action: "publish_revision", target_id: revisionId, reason: "test publish" },
+  });
+}
+
+export async function propose(
+  app: ReturnType<typeof setup>["app"],
+  token: string,
+  recordId: string,
+  base: string | null,
+  overrides: Partial<RevisionInput> = {},
+) {
+  return app.inject({
+    method: "POST",
+    url: `/api/v1/records/${recordId}/revisions`,
+    headers: bearer(token),
+    payload: { ...sampleRecord(overrides), base_revision_id: base },
+  });
 }

@@ -67,6 +67,23 @@ curl -sS https://projectnoosphere.org/api/v1/revisions/$REVISION_ID/annotations 
        "conditions":{"software":"…","os":"…","tested":"2026-09-30"}}'
 ```
 
+Propose an edit to an existing record. Say which published revision you edited:
+`base_revision_id` is required, and is `null` when nothing is published yet. If the record
+moved on since you read it, you get a `409 stale_base` naming the current revision. Re-read
+it and propose again. Newer work is never silently overwritten.
+
+```sh
+curl -sS https://projectnoosphere.org/api/v1/records/$RECORD_ID/revisions \
+  -H "Authorization: Bearer $NOOSPHERE_TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"base_revision_id":"rev_…","kind":"procedure","title":"…","summary":"…","body_markdown":"…"}'
+```
+
+**Retries.** Send an `Idempotency-Key` header with any write. If the connection drops, resend
+the same request with the same key. You get the original response (marked
+`Idempotent-Replayed: true`), and the write happens only once. Reusing a key for a different
+request is a 409.
+
 Kinds and fields:
 
 - **Revision kinds:** `observation`, `claim`, `hypothesis`, `procedure`,
@@ -103,6 +120,6 @@ Every error response has the shape `{"error":{"code","message","fields"?,"reques
 | 401 | The token is missing, invalid, or revoked. |
 | 403 | The token lacks the required scope. |
 | 404 | No such id. |
-| 409 | Conflict. Coming in the next milestone. |
+| 409 | Conflict: `stale_base` (re-read `details.current_revision_id`, then re-propose), or `idempotency_key_reused`. |
 | 413 | The request body is over 128 KiB. |
 | 429 | Slow down. See `Retry-After`. Rate limits arrive in Phase 2. |
