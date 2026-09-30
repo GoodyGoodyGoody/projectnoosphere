@@ -19,7 +19,9 @@ import { revisionMarkdown } from "./web/export.ts";
 import { errorPage, registerWebRoutes, sendHtml } from "./web/pages.ts";
 import { newId } from "./ids.ts";
 import { createAnnotation, getAnnotation, listAnnotations } from "./modules/annotations.ts";
-import { approveAnnotation, publishRevision, revokeCredentialAsSteward } from "./modules/moderation.ts";
+import { moderate, revokeCredentialAsSteward } from "./modules/moderation.ts";
+import { reviewQueue } from "./modules/review.ts";
+import { gateFeedback } from "./gate.ts";
 import { search } from "./modules/search.ts";
 import {
   createRecord,
@@ -43,6 +45,7 @@ import {
   credentialRevokeSchema,
   registrationSchema,
   RESERVED_NAME,
+  reviewQueueQuerySchema,
   revisionInputSchema,
   searchQuerySchema,
   TERMS_VERSION,
@@ -304,11 +307,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     { schema: { body: revisionInputSchema }, onRequest: authed("contribute") },
     async (req, reply) =>
       write(req, reply, "records.create", { body: req.body }, () => {
-        const { recordId, revisionId } = createRecord(db, actorOf(req), req.body, { contentLicense });
+        const { recordId, revisionId, flags } = createRecord(db, actorOf(req), req.body, { contentLicense });
         return {
           status: 201,
           location: recordUrl(recordId),
-          body: { ...getRecord(db, recordId), created_revision: getRevision(db, revisionId).revision },
+          body: { ...getRecord(db, recordId), created_revision: getRevision(db, revisionId).revision, gate: gateFeedback(flags) },
         };
       }),
   );
@@ -318,13 +321,17 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     { schema: { params: params.record, body: proposalInputSchema }, onRequest: authed("contribute") },
     async (req, reply) =>
       write(req, reply, "revisions.propose", { record_id: req.params.record_id, body: req.body }, () => {
-        const { revisionId } = proposeRevision(db, actorOf(req), req.params.record_id, req.body, {
+        const { revisionId, flags } = proposeRevision(db, actorOf(req), req.params.record_id, req.body, {
           contentLicense,
         });
         return {
           status: 201,
           location: revisionUrl(revisionId),
-          body: { revision: getRevision(db, revisionId).revision, record: getRecord(db, req.params.record_id).record },
+          body: {
+            revision: getRevision(db, revisionId).revision,
+            record: getRecord(db, req.params.record_id).record,
+            gate: gateFeedback(flags),
+          },
         };
       }),
   );
@@ -390,8 +397,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     { schema: { params: params.revision, body: annotationInputSchema }, onRequest: authed("contribute") },
     async (req, reply) =>
       write(req, reply, "annotations.create", { revision_id: req.params.revision_id, body: req.body }, () => {
-        const { annotationId } = createAnnotation(db, actorOf(req), req.params.revision_id, req.body);
-        return { status: 201, body: { annotation: getAnnotation(db, annotationId) } };
+        const { annotationId, flags } = createAnnotation(db, actorOf(req), req.params.revision_id, req.body);
+        return { status: 201, body: { annotation: getAnnotation(db, annotationId), gate: gateFeedback(flags) } };
       }),
   );
 
@@ -515,15 +522,23 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     { schema: { body: moderationInputSchema }, onRequest: authed("moderate") },
     async (req, reply) =>
       write(req, reply, "moderation.create", { body: req.body }, () => {
-        const { action, target_id, reason } = req.body;
-        const actor = actorOf(req);
-        if (action === "publish_revision") {
-          if (!target_id.startsWith("rev_")) throw invalid("target_id", "publish_revision targets a revision");
-          return { status: 201, body: { event: publishRevision(db, actor, target_id, reason) } };
+        const wants = req.body.action.endsWith("_revision") ? "rev_" : "ann_";
+        if (!req.body.target_id.startsWith(wants)) {
+          throw invalid("target_id", `${req.body.action} targets ${wants === "rev_" ? "a revision" : "an annotation"}`);
         }
-        if (!target_id.startsWith("ann_")) throw invalid("target_id", "approve_annotation targets an annotation");
-        return { status: 201, body: { event: approveAnnotation(db, actor, target_id, reason) } };
+        return { status: 201, body: { event: moderate(db, actorOf(req), req.body) } };
       }),
+  );
+
+  // The librarian's inbox: open candidates not yet decided under this rubric
+  // version, with full content, gate flags, and context. Steward-only.
+  app.get<{ Querystring: { rubric_version: string; limit: number } }>(
+    "/api/v1/admin/review-queue",
+    { schema: { querystring: reviewQueueQuerySchema }, onRequest: authed("moderate") },
+    async (req, reply) => {
+      reply.header("cache-control", "no-store");
+      return reviewQueue(db, { rubricVersion: req.query.rubric_version, limit: req.query.limit });
+    },
   );
 
   });

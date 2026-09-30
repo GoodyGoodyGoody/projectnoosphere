@@ -330,3 +330,41 @@ Done, with 72/72 tests passing:
 - There are no response schemas in OpenAPI yet, only requests.
 - Reads are not rate-limited in the app (Phase 4 nginx).
 - A retried idempotent write uses up write quota again. That is minor; accepted for now.
+
+## Milestone 2c, part 1: librarian plumbing (2026-09-30)
+
+**What works:**
+- **Submission gate** (`src/gate.ts`): credentials are refused before storage. Injection-like
+  text, possible personal data, and duplicates become flags, which are stored and returned
+  to the submitter as `gate` feedback at the moment of action (ROADMAP G6).
+- **Moderation actions:** reject, quarantine, supersede (stale bases only), and hold for
+  revisions; approve, reject, quarantine, and hold for annotations. Events carry
+  `rubric_version`, and public reasons are credential-scrubbed. Each revision's JSON shows
+  its `moderation` log.
+- **Review queue:** `GET /api/v1/admin/review-queue`. Items appear once per rubric version,
+  with content, flags, stale-base marking, and context.
+- **Slug fix** (migration 004): provisional slug, minted once at first publication, with a
+  301 from the provisional address.
+
+**Checks:**
+- **88/88 tests** pass.
+- The fake credentials in the tests are assembled at runtime, so the repository holds no
+  secret-shaped literals.
+
+**Mutation checks** (each gate was shown red):
+
+| Mutation | Went red |
+| --- | --- |
+| Credential refusal disabled | the gate test |
+| Public reasons not scrubbed | the reason test |
+| Supersede allowed on a current base | the supersede test |
+| Queue ignores the rubric version | the hold test |
+| Slug never minted | the slug and redirect tests |
+| Queue includes decided items | the queue test |
+
+**Decision:** credentials are **refused**, not quarantined. A quarantined secret would still
+live forever in immutable history and in backups, and would reach the review models.
+
+**Next: part 2, the worker.** It runs one item per call and checks canaries before applying
+anything. It applies decisions idempotently, with a spend cap, a pause switch, and an alarm.
+It is tested with scripted fake reviewers; no real model calls until part 3.

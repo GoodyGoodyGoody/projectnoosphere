@@ -1,8 +1,10 @@
 import type { Actor } from "../auth.ts";
 import type { DB } from "../db.ts";
 import { conflict, invalid, notFound } from "../errors.ts";
+import { duplicateOf, refuseSecrets, scanFlags, type GateFlag } from "../gate.ts";
 import { revisionHash, REVISION_HASH_SCHEMA } from "../hash.ts";
 import { newId } from "../ids.ts";
+import { moderationLog } from "./log.ts";
 import type { ProposalInput, RevisionInput, SourceRef } from "../schemas.ts";
 import { nowIso } from "../time.ts";
 
@@ -19,8 +21,10 @@ export const CANDIDATE_NOTICE =
 
 // ---- slugs ------------------------------------------------------------------
 
-// Permanent once assigned: the slug is derived from the FIRST revision's title
-// and never changes, even when later revisions retitle the record.
+// Permanent once minted. A new record's slug is provisional (its own id,
+// lowercased) until its first publication; then it is minted ONCE from the
+// reviewed title and never changes, even when later revisions retitle it.
+// Minting at publication means an unreviewed title never becomes an address.
 export function slugify(title: string): string {
   const base = title
     .normalize("NFKD")
@@ -35,7 +39,11 @@ export function slugify(title: string): string {
   return (lastDash > 40 ? cut.slice(0, lastDash) : cut).replace(/-+$/, "");
 }
 
-function uniqueSlug(db: DB, title: string, recordId: string): string {
+export function provisionalSlug(recordId: string): string {
+  return recordId.toLowerCase();
+}
+
+export function uniqueSlug(db: DB, title: string, recordId: string): string {
   const base = slugify(title);
   const taken = db.prepare("SELECT 1 FROM records WHERE slug = ?");
   if (!taken.get(base)) return base;
@@ -55,14 +63,43 @@ function assertRevisionRefsExist(db: DB, refs: { revision_id?: string }[], field
   });
 }
 
+// Every contributor-written string in a revision, by field path — what the
+// gate scans.
+function revisionTexts(input: RevisionInput): Record<string, string> {
+  const t: Record<string, string> = {
+    title: input.title,
+    summary: input.summary,
+    body_markdown: input.body_markdown,
+  };
+  (input.tags ?? []).forEach((tag, i) => (t[`tags[${i}]`] = tag));
+  (input.sources ?? []).forEach((s, i) => {
+    t[`sources[${i}].note`] = s.note;
+    if (s.url) t[`sources[${i}].url`] = s.url;
+    if (s.title) t[`sources[${i}].title`] = s.title;
+  });
+  (input.links ?? []).forEach((l, i) => {
+    if (l.note) t[`links[${i}].note`] = l.note;
+  });
+  for (const [k, v] of Object.entries(input.conditions ?? {})) t[`conditions.${k}`] = String(v);
+  return t;
+}
+
 // Rules the JSON schema cannot express. Assertions about external facts need a
 // source; clearly labeled hypotheses and observations may stand on their own.
-function checkRevisionInput(db: DB, input: RevisionInput): void {
+// Credentials are refused here, before anything is written. Returns the gate's
+// flags for everything else it noticed.
+function checkRevisionInput(db: DB, input: RevisionInput): GateFlag[] {
+  const texts = revisionTexts(input);
+  refuseSecrets(texts);
   if (input.kind === "claim" && (input.sources ?? []).length === 0) {
     throw invalid("sources", "a claim must cite at least one source");
   }
   assertRevisionRefsExist(db, input.sources ?? [], "sources");
   assertRevisionRefsExist(db, input.links ?? [], "links");
+  const flags = scanFlags({ title: input.title, summary: input.summary, body_markdown: input.body_markdown });
+  const dup = duplicateOf(db, input.title, input.body_markdown);
+  if (dup) flags.push({ code: "duplicate", field: "body_markdown", message: `same title and body as ${dup}` });
+  return flags;
 }
 
 // ---- writes -------------------------------------------------------------------
@@ -78,19 +115,18 @@ export function createRecord(
   actor: Actor,
   input: RevisionInput,
   opts: CreateRecordOptions,
-): { recordId: string; revisionId: string } {
-  checkRevisionInput(db, input);
+): { recordId: string; revisionId: string; flags: GateFlag[] } {
+  const flags = checkRevisionInput(db, input);
   return db
     .transaction(() => {
       const recordId = newId("rec");
       const revisionId = newId("rev");
       const now = nowIso();
-      const slug = uniqueSlug(db, input.title, recordId);
 
       db.prepare(
         `INSERT INTO records (id, slug, current_revision_id, created_by, created_at, updated_at)
          VALUES (?, ?, NULL, ?, ?, ?)`,
-      ).run(recordId, slug, actor.contributorId, now, now);
+      ).run(recordId, provisionalSlug(recordId), actor.contributorId, now, now);
 
       insertRevision(db, {
         id: revisionId,
@@ -101,8 +137,9 @@ export function createRecord(
         input,
         content_license: opts.contentLicense,
         created_at: now,
+        flags,
       });
-      return { recordId, revisionId };
+      return { recordId, revisionId, flags };
     })
     .immediate();
 }
@@ -117,9 +154,9 @@ export function proposeRevision(
   recordId: string,
   input: ProposalInput,
   opts: CreateRecordOptions,
-): { revisionId: string } {
+): { revisionId: string; flags: GateFlag[] } {
   const { base_revision_id, parent_revision_id, ...content } = input;
-  checkRevisionInput(db, content);
+  const flags = checkRevisionInput(db, content);
   return db
     .transaction(() => {
       const rec = db.prepare("SELECT current_revision_id FROM records WHERE id = ?").get(recordId) as
@@ -153,9 +190,10 @@ export function proposeRevision(
         input: content,
         content_license: opts.contentLicense,
         created_at: now,
+        flags,
       });
       db.prepare("UPDATE records SET updated_at = ? WHERE id = ?").run(now, recordId);
-      return { revisionId };
+      return { revisionId, flags };
     })
     .immediate();
 }
@@ -171,6 +209,7 @@ function insertRevision(
     input: RevisionInput;
     content_license: string;
     created_at: string;
+    flags: GateFlag[];
   },
 ): void {
   const fields = {
@@ -204,8 +243,8 @@ function insertRevision(
     fields.content_license, REVISION_HASH_SCHEMA, content_hash, fields.created_at,
   );
   db.prepare(
-    "INSERT INTO revision_review (revision_id, state, reason, updated_at) VALUES (?, 'candidate', NULL, ?)",
-  ).run(r.id, r.created_at);
+    "INSERT INTO revision_review (revision_id, state, reason, updated_at, gate_flags) VALUES (?, 'candidate', NULL, ?, ?)",
+  ).run(r.id, r.created_at, JSON.stringify(r.flags));
 }
 
 // ---- reads and representations ------------------------------------------------
@@ -305,7 +344,25 @@ export function getRevision(db: DB, revisionId: string) {
       agent_guide: "/agent-guide",
     },
     notice: noticeFor(row.review_state),
+    // Every moderation decision on this exact revision, with its public reason.
+    moderation: moderationLog(db, row.id),
   };
+}
+
+// Resolve a public address. A record keeps answering at its provisional
+// address (its lowercased id) after its slug is minted; the caller redirects.
+export function findRecordByAddress(db: DB, address: string): { recordId: string; slug: string } {
+  const bySlug = db.prepare("SELECT id, slug FROM records WHERE slug = ?").get(address) as
+    | { id: string; slug: string }
+    | undefined;
+  if (bySlug) return { recordId: bySlug.id, slug: bySlug.slug };
+  if (/^rec_[0-9a-z]{26}$/.test(address)) {
+    const byId = db.prepare("SELECT id, slug FROM records WHERE id = ?").get("rec_" + address.slice(4).toUpperCase()) as
+      | { id: string; slug: string }
+      | undefined;
+    if (byId) return { recordId: byId.id, slug: byId.slug };
+  }
+  throw notFound("record");
 }
 
 interface RecordRow {
@@ -346,12 +403,6 @@ export function publishedForSitemap(db: DB, max = 50_000) {
         ORDER BY r.slug LIMIT ?`,
     )
     .all(max) as { slug: string; published_at: string | null }[];
-}
-
-export function recordIdBySlug(db: DB, slug: string): string {
-  const id = db.prepare("SELECT id FROM records WHERE slug = ?").pluck().get(slug) as string | undefined;
-  if (!id) throw notFound("record");
-  return id;
 }
 
 // Published records only — those whose current revision is reviewed — newest

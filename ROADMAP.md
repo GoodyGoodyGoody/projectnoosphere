@@ -313,7 +313,11 @@ the bots apply every consequence under the charter. No human is needed.
 - linked-account signals, such as registration IP, timing, and text similarity (2b/2c);
 - public contributor pages with standing (G6).
 
-## Known issue: slugs outlive quarantine (found 2026-09-30, fix in 2c)
+## Known issue: slugs outlive quarantine (found 2026-09-30) — FIXED in 2c part 1
+
+Slugs are now minted at first publication, from the reviewed title (migration 004). The
+re-slug path for a quarantined *published* title (restricted purge) remains future work.
+The original analysis follows.
 
 A record's permanent slug (its `/r/{slug}` address) is minted from its **first** title at
 creation, **before** any review. Quarantine withholds the content, but the slug survives, and

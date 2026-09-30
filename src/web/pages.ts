@@ -11,9 +11,9 @@ import {
   getRevision,
   listPublished,
   listRevisions,
+  findRecordByAddress,
   noticeFor,
   publishedForSitemap,
-  recordIdBySlug,
   recordUrl,
   revisionUrl,
 } from "../modules/records.ts";
@@ -384,7 +384,10 @@ ${res.next_offset !== null ? html`<p><a href="/search?q=${encodeURIComponent(q)}
   // The record's current published revision — or, when nothing is published,
   // its latest candidate, clearly labeled and kept out of search indexes.
   app.get<{ Params: { slug: string } }>("/r/:slug", async (req, reply) => {
-    const recordId = recordIdBySlug(db, req.params.slug);
+    const { recordId, slug } = findRecordByAddress(db, req.params.slug);
+    // A provisional address (the record's id) keeps working after the slug is
+    // minted at first publication: it redirects, permanently.
+    if (slug !== req.params.slug) return reply.redirect(`/r/${slug}`, 301);
     const rec = getRecord(db, recordId);
     const rev = rec.current_revision ?? getRevision(db, rec.latest_revision.id).revision;
     if (isWithheld(rev)) {
@@ -415,7 +418,15 @@ ${machineLinks(recordId, rev.id)}`;
   // record page (or an older state of it), which is the canonical search target.
   app.get<{ Params: { slug: string; revision_id: string } }>("/r/:slug/revisions/:revision_id", async (req, reply) => {
     const { revision: rev } = getRevision(db, req.params.revision_id);
-    if (rev.record_slug !== req.params.slug) throw new ApiError(404, "not_found", "revision not found");
+    if (rev.record_slug !== req.params.slug) {
+      // The same revision under its record's provisional address: redirect.
+      // Under any other record's address: it does not exist there.
+      const addressed = (() => {
+        try { return findRecordByAddress(db, req.params.slug).recordId; } catch { return null; }
+      })();
+      if (addressed === rev.record_id) return reply.redirect(`/r/${rev.record_slug}/revisions/${rev.id}`, 301);
+      throw new ApiError(404, "not_found", "revision not found");
+    }
     if (isWithheld(rev)) {
       return sendHtml(reply, page({ title: "Withheld", noindex: true, body: tombstone(rev) }), { noindex: true });
     }

@@ -115,8 +115,9 @@ export async function publishedRecord(
   token: string,
   overrides: Partial<RevisionInput> = {},
 ) {
-  const { recordId, revisionId, json } = await createRecordAs(t.app, token, sampleRecord(overrides));
+  const { recordId, revisionId } = await createRecordAs(t.app, token, sampleRecord(overrides));
   const res = await publish(t.app, t.s.token, revisionId);
   if (res.statusCode !== 201) throw new Error(`publish failed ${res.statusCode}: ${res.body}`);
-  return { recordId, revisionId, slug: json.record.slug as string };
+  // The permanent slug is minted at first publication.
+  return { recordId, revisionId, slug: res.json().event.record_slug as string };
 }

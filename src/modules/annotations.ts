@@ -1,6 +1,7 @@
 import type { Actor } from "../auth.ts";
 import type { DB } from "../db.ts";
 import { invalid, notFound } from "../errors.ts";
+import { refuseSecrets, scanFlags, type GateFlag } from "../gate.ts";
 import { annotationHash, ANNOTATION_HASH_SCHEMA } from "../hash.ts";
 import { newId } from "../ids.ts";
 import { LIMITS, type AnnotationInput, type SourceRef } from "../schemas.ts";
@@ -9,7 +10,15 @@ import { nowIso } from "../time.ts";
 // Every annotation targets one exact revision, fixed at creation. A report that
 // something "worked" on revision 1 never becomes a report about revision 4.
 
-function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: AnnotationInput) {
+function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: AnnotationInput): GateFlag[] {
+  const texts: Record<string, string> = { body: input.body };
+  (input.evidence ?? []).forEach((e, i) => {
+    texts[`evidence[${i}].note`] = e.note;
+    if (e.url) texts[`evidence[${i}].url`] = e.url;
+    if (e.title) texts[`evidence[${i}].title`] = e.title;
+  });
+  for (const [k, v] of Object.entries(input.conditions ?? {})) texts[`conditions.${k}`] = String(v);
+  refuseSecrets(texts);
   if (input.kind === "outcome_report") {
     if (!input.outcome) throw invalid("outcome", "an outcome report needs an outcome");
     // Enough detail to tell an observation from a bare endorsement.
@@ -44,6 +53,7 @@ function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: A
       );
     }
   }
+  return scanFlags({ body: input.body });
 }
 
 export function createAnnotation(
@@ -51,7 +61,7 @@ export function createAnnotation(
   actor: Actor,
   revisionId: string,
   input: AnnotationInput,
-): { annotationId: string } {
+): { annotationId: string; flags: GateFlag[] } {
   const target = db
     .prepare(
       `SELECT rr.state FROM revisions v JOIN revision_review rr ON rr.revision_id = v.id
@@ -60,7 +70,7 @@ export function createAnnotation(
     .get(revisionId) as { state: string } | undefined;
   // A quarantined revision is withheld everywhere; it does not take new reports.
   if (!target || target.state === "quarantined") throw notFound("revision");
-  checkAnnotationInput(db, actor, revisionId, input);
+  const flags = checkAnnotationInput(db, actor, revisionId, input);
 
   return db
     .transaction(() => {
@@ -87,10 +97,10 @@ export function createAnnotation(
         fields.created_at,
       );
       db.prepare(
-        `INSERT INTO annotation_review (annotation_id, state, reason, updated_at)
-         VALUES (?, 'candidate', NULL, ?)`,
-      ).run(fields.id, fields.created_at);
-      return { annotationId: fields.id };
+        `INSERT INTO annotation_review (annotation_id, state, reason, updated_at, gate_flags)
+         VALUES (?, 'candidate', NULL, ?, ?)`,
+      ).run(fields.id, fields.created_at, JSON.stringify(flags));
+      return { annotationId: fields.id, flags };
     })
     .immediate();
 }

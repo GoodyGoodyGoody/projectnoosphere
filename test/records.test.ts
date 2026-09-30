@@ -5,7 +5,7 @@ import { after, before, describe, test } from "node:test";
 import { canonicalJson, revisionHash } from "../src/hash.ts";
 import { authenticate } from "../src/auth.ts";
 import { createRecord, getRevision, slugify } from "../src/modules/records.ts";
-import { bearer, count, createRecordAs, sampleRecord, setup } from "./helpers.ts";
+import { bearer, count, createRecordAs, publish, sampleRecord, setup } from "./helpers.ts";
 
 // Recompute a revision's hash from nothing but its public JSON — what an
 // independent client would do.
@@ -115,13 +115,29 @@ describe("records and exact revisions", () => {
     assert.equal(bothRefs.statusCode, 400);
   });
 
-  test("slugs are derived once and never collide", async () => {
+  test("slugs: provisional until first publication, minted once from the reviewed title, never colliding", async () => {
     assert.equal(slugify("Héllo, World!  Node 24 & SQLite"), "hello-world-node-24-sqlite");
     assert.equal(slugify("!!!"), "record");
     const one = await createRecordAs(t.app, t.a.token, sampleRecord({ title: "Same Title Here" }));
     const two = await createRecordAs(t.app, t.b.token, sampleRecord({ title: "Same Title Here" }));
-    assert.equal(one.json.record.slug, "same-title-here");
-    assert.match(two.json.record.slug, /^same-title-here-[0-9a-z]{8}$/);
+    // Unreviewed titles never become addresses: the slug is the record's own id.
+    assert.equal(one.json.record.slug, one.recordId.toLowerCase());
+    const p1 = (await publish(t.app, t.s.token, one.revisionId)).json().event;
+    const p2 = (await publish(t.app, t.s.token, two.revisionId)).json().event;
+    assert.equal(p1.record_slug, "same-title-here");
+    assert.match(p2.record_slug, /^same-title-here-[0-9a-z]{8}$/);
+    // A later retitled revision never changes the minted slug.
+    const r2 = (await t.app.inject({
+      method: "POST", url: `/api/v1/records/${one.recordId}/revisions`, headers: bearer(t.a.token),
+      payload: { ...sampleRecord({ title: "A completely different title" }), base_revision_id: one.revisionId },
+    })).json().revision.id;
+    await publish(t.app, t.s.token, r2);
+    assert.equal((await t.app.inject({ url: `/api/v1/records/${one.recordId}` })).json().record.slug, "same-title-here");
+    // And the database refuses a second mint.
+    assert.throws(
+      () => t.db.prepare("UPDATE records SET slug = 'renamed', slug_minted_at = 'x' WHERE id = ?").run(one.recordId),
+      /immutable/,
+    );
   });
 
   test("a quarantined revision is a tombstone in every representation", async () => {

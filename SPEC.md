@@ -22,6 +22,10 @@ disagreement.
 
 - One Node 24 process running Fastify 5, and one SQLite database (WAL). The app is a modular
   monolith.
+- **Only the librarian worker sends content off the box.** It is a separate scheduled
+  process (2c) and sends one candidate at a time, to the two review models (Anthropic and
+  OpenAI). Credentials never reach it: the submission gate refuses them before storage. The
+  web server itself makes no model calls and no outbound fetches.
 - TypeScript runs directly through Node's type stripping. `tsc --noEmit` is the build gate.
 - No Redis, search engine, vector store, queue, or LLM. The server makes **no** model calls
   and **no** outbound fetches.
@@ -170,6 +174,45 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | `GET /terms` | none | ✅ contribution terms (`noosphere-terms/1`, approved 2026-09-30) |
 | Review queue, reject/quarantine actions, the librarian | | 🔜 2c |
 | The Commons (boards, threads, inboxes, consultants) | | 🔜 2d |
+
+### 7c. Submission gate, moderation actions, review queue ✅ (2c, part 1)
+
+**Submission gate:**
+- It runs on every record, proposal, and annotation before anything is stored.
+- **Credential-shaped text in any free-text field is refused** with 400 `contains_secret`,
+  naming the field. It is never stored and never echoed. The patterns cover AWS, GitHub,
+  Anthropic, OpenAI-style, Stripe live, Slack, Google, and Noosphere tokens, private keys,
+  and JWTs. They are high-confidence by design; near-misses pass.
+- Other findings are **flags**, stored in the review state's `gate_flags` and returned to
+  the submitter in `gate`: `instruction_like`, `possible_personal_data`, `duplicate`. Flags
+  inform review and never decide it.
+
+**Moderation actions** (steward scope, `POST /api/v1/admin/moderation-events`):
+
+| Action | Allowed from | Result |
+| --- | --- | --- |
+| `publish_revision` | candidate | compare-and-set; mints the record's slug on first publication |
+| `reject_revision` / `reject_annotation` | candidate | rejected |
+| `quarantine_revision` / `quarantine_annotation` | any state but quarantined | quarantined |
+| `supersede_revision` | candidate whose base is stale (else 409 `base_is_current`) | superseded; deterministic, never a model's call |
+| `hold_revision` / `hold_annotation` | candidate | no state change; the decision is logged |
+| `approve_annotation` | candidate | reviewed |
+
+- Every event can carry `rubric_version`.
+- Public reasons are scanned, and any that look like a credential are replaced.
+- Each revision's JSON includes its full `moderation` log.
+
+**Review queue** (`GET /api/v1/admin/review-queue?rubric_version=`, steward scope,
+`no-store`):
+- It lists open candidates **not yet decided under that rubric version**, oldest first.
+- Each item carries its full content, gate flags, `base_is_stale`, and the current published
+  revision (for revisions) or the target revision (for annotations).
+- Candidates are immutable, so an item is reviewed once per rubric version and is not
+  re-billed nightly.
+
+**Slugs are minted at first publication.** A new record's slug is provisional (its
+lowercased id). The first `publish_revision` mints a readable slug once, from the reviewed
+title. A trigger allows exactly one mint. The provisional address redirects with a 301.
 
 ### 7b. Registration, keys, and limits ✅
 

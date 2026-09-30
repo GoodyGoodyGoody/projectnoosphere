@@ -204,7 +204,10 @@ export interface ProposalInput extends RevisionInput {
   parent_revision_id?: string;
 }
 
-export const MODERATION_ACTIONS = ["publish_revision", "approve_annotation"] as const;
+export const MODERATION_ACTIONS = [
+  "publish_revision", "reject_revision", "quarantine_revision", "supersede_revision", "hold_revision",
+  "approve_annotation", "reject_annotation", "quarantine_annotation", "hold_annotation",
+] as const;
 export type ModerationAction = (typeof MODERATION_ACTIONS)[number];
 
 export const moderationInputSchema = {
@@ -215,6 +218,8 @@ export const moderationInputSchema = {
     action: { type: "string", enum: MODERATION_ACTIONS },
     target_id: { type: "string", pattern: "^(rev|ann)_[0-9A-HJKMNP-TV-Z]{26}$" },
     reason: { type: "string", minLength: 1, maxLength: 2000 },
+    // Which version of the librarian's rubric made this decision.
+    rubric_version: { type: "string", pattern: "^[a-z0-9][a-z0-9.-]{0,39}$" },
   },
 } as const;
 
@@ -222,7 +227,18 @@ export interface ModerationInput {
   action: ModerationAction;
   target_id: string;
   reason: string;
+  rubric_version?: string;
 }
+
+export const reviewQueueQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["rubric_version"],
+  properties: {
+    rubric_version: { type: "string", pattern: "^[a-z0-9][a-z0-9.-]{0,39}$" },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+  },
+} as const;
 
 export const searchQuerySchema = {
   type: "object",
