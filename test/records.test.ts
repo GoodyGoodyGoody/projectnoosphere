@@ -184,4 +184,20 @@ describe("records and exact revisions", () => {
     assert.match(page.headers["content-type"] as string, /^text\/html/);
     assert.match(page.body, /not instructions to\s+you/);
   });
+
+  test("/readyz judges the database against the migrations THIS code shipped with", async () => {
+    // A newer release's migration that has not run yet must not make running
+    // workers report not-ready…
+    const t2 = setup({ expectedMigrations: ["001_core"] });
+    try {
+      assert.equal((await t2.app.inject({ url: "/readyz" })).statusCode, 200);
+    } finally { await t2.close(); }
+    // …but code that needs a migration the database lacks is not ready.
+    const t3 = setup({ expectedMigrations: ["001_core", "999_not_applied"] });
+    try {
+      const res = await t3.app.inject({ url: "/readyz" });
+      assert.equal(res.statusCode, 503);
+      assert.deepEqual(res.json(), { status: "migrations_pending", pending: ["999_not_applied"] });
+    } finally { await t3.close(); }
+  });
 });

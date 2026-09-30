@@ -25,14 +25,14 @@ interface Migration {
   sql: string;
 }
 
-function listMigrations(): Migration[] {
-  return readdirSync(MIGRATIONS_DIR)
+function listMigrations(dir: string = MIGRATIONS_DIR): Migration[] {
+  return readdirSync(dir)
     .filter((f) => /^\d{3}_[a-z0-9_]+\.sql$/.test(f))
     .sort()
     .map((f) => ({
       version: Number(f.slice(0, 3)),
       name: f.replace(/\.sql$/, ""),
-      sql: readFileSync(join(MIGRATIONS_DIR, f), "utf8"),
+      sql: readFileSync(join(dir, f), "utf8"),
     }));
 }
 
@@ -44,12 +44,19 @@ function ensureMigrationTable(db: DB): void {
   )`);
 }
 
-export function pendingMigrations(db: DB): string[] {
+// The migrations a piece of code was shipped with. Take this ONCE, when a
+// process starts: it is what that process's code needs, and it must not change
+// when a newer release's files are checked out underneath a running worker.
+export function migrationNames(dir: string = MIGRATIONS_DIR): string[] {
+  return listMigrations(dir).map((m) => m.name);
+}
+
+export function pendingMigrations(db: DB, expected: string[] = migrationNames()): string[] {
   ensureMigrationTable(db);
   const applied = new Set(
-    db.prepare("SELECT version FROM schema_migrations").pluck().all() as number[],
+    db.prepare("SELECT name FROM schema_migrations").pluck().all() as string[],
   );
-  return listMigrations().filter((m) => !applied.has(m.version)).map((m) => m.name);
+  return expected.filter((name) => !applied.has(name));
 }
 
 // Applies each pending migration in its own IMMEDIATE transaction, so two

@@ -2,7 +2,7 @@ import { Ajv, type ErrorObject } from "ajv";
 import swagger from "@fastify/swagger";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
-import { pendingMigrations, schemaVersion, type DB } from "./db.ts";
+import { migrationNames, pendingMigrations, schemaVersion, type DB } from "./db.ts";
 import { ApiError, invalid, type FieldError } from "./errors.ts";
 import { withIdempotency, type TestHooks, type WriteResult } from "./idempotency.ts";
 import { API_TAGS, documentRoute } from "./openapi.ts";
@@ -83,6 +83,12 @@ export interface AppOptions {
   // The running code's identity, reported by /readyz so a release can prove
   // which commit every worker is serving (scripts/release.sh asserts it).
   version?: string;
+  // The migrations this code needs (default: those shipped with it, read once
+  // at build time). /readyz compares against this snapshot, never against the
+  // directory at request time: a release rehearsal showed old workers reporting
+  // 503 for ~13 s after the next release's files were checked out, until its
+  // migration ran.
+  expectedMigrations?: string[];
   testHooks?: TestHooks;
 }
 
@@ -147,6 +153,7 @@ function sendError(reply: FastifyReply, req: FastifyRequest, err: ApiError) {
 export function buildApp(opts: AppOptions): FastifyInstance {
   const { db } = opts;
   const contentLicense = opts.contentLicense ?? DEFAULT_CONTENT_LICENSE;
+  const expectedMigrations = opts.expectedMigrations ?? migrationNames();
 
   const app = Fastify({
     logger: opts.logger ?? false,
@@ -295,7 +302,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.get("/readyz", async (_req, reply) => {
     try {
       db.prepare("SELECT 1").get();
-      const pending = pendingMigrations(db);
+      const pending = pendingMigrations(db, expectedMigrations);
       if (pending.length) return reply.code(503).send({ status: "migrations_pending", pending });
       return { status: "ready", schema_version: schemaVersion(db), version: opts.version ?? "dev" };
     } catch {
