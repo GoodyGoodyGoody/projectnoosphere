@@ -128,7 +128,8 @@ then restored.
 
 ### Checks performed (real output)
 - `npm run check` exits 0.
-- **39/39 tests** pass across 6 suites in ~7.4 s.
+- **39/39 tests** pass across 6 suites. The suite takes ~10 s, dominated by the forced-overlap
+  races.
 - The new suites cover proposals, idempotency, and **cross-process concurrency**. Separate
   OS processes, each with its own app and its own connection to one SQLite file (like PM2
   cluster workers), run three rounds of three-way publish races: exactly one winner each
@@ -143,7 +144,8 @@ then restored.
 | Proposal ignores a stale base | the stale-base tests |
 | Replay ignores a payload mismatch | the key-reuse 409 test |
 | Idempotency results never stored | the replay and parallel-retry tests |
-| Idempotency in a DEFERRED transaction | the parallel-retry test, **but only after a fix**; see below |
+| Idempotency in a DEFERRED transaction | both race tests, **but only after a fix**; see below |
+| Hold removed from either race test | that test's contention proof |
 
 ### Found by checking
 - **The first cross-process test passed by timing luck.** Weakening the idempotency
@@ -152,6 +154,13 @@ then restored.
 - Fix: a test hook (`testHooks.idempotencyAfterLookup`, unset in production) holds each
   transaction open for 300 ms after its lookup, forcing real overlap. With it, the DEFERRED
   mutation fails, and the real IMMEDIATE code passes.
+- **The publish race had the same gap,** and it was fixed the same way. Each publish goes
+  through the hook, and **both race tests now assert that contention happened**:
+  - **Publish race:** the slowest process takes ≥ 1.8× the hold, so it queued behind
+    another's open transaction.
+  - **Retry race:** every replay takes ≥ 0.8× the hold. A replay does no work of its own, so
+    it only takes that long if it waited.
+- Removing the hold makes each proof fail.
 - Lesson: a race test must *prove* the race happened.
 
 ### Decisions

@@ -18,7 +18,15 @@ async function race(dbPath: string, requests: object[], holdMs = 0) {
       run(process.execPath, [WORKER, dbPath, String(startAt), JSON.stringify(r)], { timeout: 20_000, env }),
     ),
   );
-  return outs.map((o) => JSON.parse(o.stdout) as { status: number; body: any; replayed: string | null });
+  return outs.map((o) => JSON.parse(o.stdout) as { status: number; body: any; replayed: string | null; elapsedMs: number });
+}
+
+// Proof the race happened: with each transaction held HOLD ms, requests that
+// overlapped must queue behind each other, so the slowest takes ≥ ~2×HOLD.
+// Requests that merely ran one after another would each take ~HOLD.
+function assertContended(results: { elapsedMs: number }[], holdMs: number) {
+  const slowest = Math.max(...results.map((r) => r.elapsedMs));
+  assert.ok(slowest >= 1.8 * holdMs, `no contention observed (slowest ${slowest} ms, hold ${holdMs} ms)`);
 }
 
 describe("concurrency across processes", () => {
@@ -39,10 +47,14 @@ describe("concurrency across processes", () => {
       for (const who of [t.a, t.b, t.a]) {
         candidates.push((await propose(t.app, who.token, recordId, base, { title: `Round ${round} edit` })).json().revision.id);
       }
-      const results = await race(dbPath, candidates.map((id) => ({
-        method: "POST", url: "/api/v1/admin/moderation-events", headers: bearer(t.s.token),
+      // Distinct Idempotency-Keys route each publish through the hold, so all
+      // three transactions are genuinely in flight together.
+      const results = await race(dbPath, candidates.map((id, i) => ({
+        method: "POST", url: "/api/v1/admin/moderation-events",
+        headers: { ...bearer(t.s.token), "idempotency-key": `race-${round}-${i}` },
         payload: { action: "publish_revision", target_id: id, reason: `race round ${round}` },
-      })));
+      })), 300);
+      assertContended(results, 300);
       const winners = results.filter((r) => r.status === 201);
       const losers = results.filter((r) => r.status === 409);
       assert.equal(winners.length, 1, JSON.stringify(results.map((r) => r.status)));
@@ -64,6 +76,13 @@ describe("concurrency across processes", () => {
     // Each process holds its transaction 300 ms after the lookup, so all three are
     // in flight together; only IMMEDIATE transactions make the 2nd and 3rd wait.
     const results = await race(dbPath, [req, req, req], 300);
+    // Proof of overlap: a replay does no work and skips the hold, so it returns in
+    // a few ms — unless it was queued behind the first request's open transaction.
+    const replays = results.filter((r) => r.replayed === "true");
+    assert.ok(
+      replays.every((r) => r.elapsedMs >= 0.8 * 300),
+      `replays did not wait for the in-flight write: ${JSON.stringify(replays.map((r) => r.elapsedMs))} ms`,
+    );
     assert.ok(results.every((r) => r.status === 201), JSON.stringify(results.map((r) => r.status)));
     assert.equal(new Set(results.map((r) => r.body.record.id)).size, 1);
     assert.equal(results.filter((r) => r.replayed === "true").length, 2);

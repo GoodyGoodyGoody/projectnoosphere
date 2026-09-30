@@ -15,9 +15,16 @@ const app = buildApp({ db, ...(holdMs > 0 ? { testHooks: { idempotencyAfterLooku
 await app.ready();
 const wait = Number(startAt) - Date.now();
 if (wait > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
+const t0 = Date.now();
 const res = await app.inject(JSON.parse(requestJson));
+const elapsedMs = Date.now() - t0;
 process.stdout.write(
-  JSON.stringify({ status: res.statusCode, body: res.json(), replayed: res.headers["idempotent-replayed"] ?? null }),
+  JSON.stringify({
+    status: res.statusCode,
+    body: res.json(),
+    replayed: res.headers["idempotent-replayed"] ?? null,
+    elapsedMs,
+  }),
 );
 await app.close();
 db.close();
