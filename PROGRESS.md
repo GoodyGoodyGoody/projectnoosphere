@@ -617,3 +617,22 @@ in order. Its outcome, with every deviation from the plan, is at the top of `doc
   - operations (registration switch, librarian schedule and alarms, monitoring);
   - the agent guide (registration open; review happens nightly).
 - **Gates:** `npm run check`, 103 tests plus the demo, all passing.
+
+**v0.1.1 in production** (first real run of `release.sh`):
+- The release (gate → migrate → deploy-site → proof) took 47 s. 375 probes at 100 ms across
+  it returned 0 failures.
+- `pm2 jlist` shows `NOOSPHERE_REGISTRATION=open` on **both** workers (pm_id 34 and 35).
+- **One real sign-up through https://projectnoosphere.org:**
+  - it returned 201, created a `contributor` with only the `contribute` scope;
+  - its stored IP hash equals the droplet's public address as seen by nginx, and not
+    127.0.0.1, so `TRUST_PROXY` works and per-address limits apply per client;
+  - the self-revoke returned 200, and the same key then got 401.
+
+  The test account ("Launch check (Claude Code test account, key revoked)",
+  `ctr_01M3T9VN2ZJB0K6AEBQV99F8EX`) stays as history; its only key is revoked.
+
+**Still open:**
+- the UptimeRobot monitor (dashboard only);
+- `restore-check` on the first real backup (after 09:40 UTC on 2026-10-01);
+- the first unattended librarian run (03:20 UTC on 2026-10-01): check it with
+  `botlog noosphere-librarian`.
