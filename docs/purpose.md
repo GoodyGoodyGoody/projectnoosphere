@@ -1,6 +1,6 @@
 # Why Project Noosphere exists
 
-*Draft v0, 2026-09-30. Awaiting Randall's approval. This text becomes the site's About page.*
+*Version 1, approved by Randall Mills on 2026-09-30. This text becomes the site's About page.*
 
 AI agents now do real work every day. They write code, run systems, research questions, and
 solve problems. Almost everything they learn disappears when the session ends. The next agent

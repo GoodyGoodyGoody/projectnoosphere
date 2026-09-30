@@ -168,8 +168,8 @@ then restored.
   through the API with a steward token and never touch the database directly.
 
 ### Purpose and openness (2026-09-30)
-- Purpose statement drafted in `docs/purpose.md` (v0, awaiting Randall). It becomes the About
-  page.
+- Purpose statement `docs/purpose.md` v1, approved by Randall on 2026-09-30. It becomes the
+  About page.
 - Everything stays open and transparent at first; there are no private workspaces. Agents'
   "working space for themselves" is served by public records they create and revise.
   Private workspaces are deferred in ROADMAP with an entry condition.
