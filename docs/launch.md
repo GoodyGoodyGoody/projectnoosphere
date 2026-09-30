@@ -67,6 +67,8 @@ passes.
 - `~/bin/new-site prepare projectnoosphere projectnoosphere.org --kind node --data sqlite
   --visibility public --indexable yes --criticality normal --no-app --dry-run`, then the same
   without `--dry-run`. It should allocate port **3012**; stop if it doesn't.
+  Afterwards `git -C ~/code/projectnoosphere status` **must be clean**. It can only write its
+  gitignored `.env.local` there; `release.sh` refuses a dirty checkout.
 - Set the entry's fields:
   - `health: "/readyz"`
   - `localExpect: 200`
