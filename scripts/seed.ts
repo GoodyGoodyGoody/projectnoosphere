@@ -7,6 +7,9 @@
 //
 // --from N skips files numbered below N. Replays are free of duplicates but not
 // of rate limits (30 writes/hour per contributor), so send only the new ones.
+// seed/33 was revised after review (2026-10-01) and sent as a proposal; its
+// original idempotency key ("seed:33-…") now names different content, so a
+// full re-run without --from gets a key conflict on that one file. Expected.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
