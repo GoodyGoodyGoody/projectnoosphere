@@ -79,7 +79,7 @@ passes.
 
 ## 2. Register the site (Shared: `~/bin/new-site` fix, `~/bin/sites.json`)
 **Do:**
-- **First, fix `new-site`** by applying `deploy/new-site-no-app.patch` to `~/bin/new-site`,
+- **First, fix `new-site`** by applying a patch to `~/bin/new-site` (it now lives in that tool's own history),
   then commit and push `~/bin`.
   - **The bug:** `prepare --no-app` is documented as "wire an existing repo; do not
     scaffold", yet it scaffolds. On a throwaway copy it wrote `server.mjs`, `src/lib/`
