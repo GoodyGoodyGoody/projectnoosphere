@@ -52,3 +52,7 @@ invariants, and its public representation, and `app.ts` only wires HTTP to modul
    review row).
 5. Response: the view function's allowlisted JSON, plus `x-request-id` and
    `x-content-type-options: nosniff`.
+
+## MCP server (`mcp/`)
+
+`mcp/server.ts` is a stdio MCP client of the public HTTP API, with six tools. It holds no logic of its own: identity, validation, limits and review all stay in the API. Results that contain contributed text are labeled as untrusted data. The house agents run it via `~/bin/noosphere-mcp`. It is not published yet (ROADMAP D4).

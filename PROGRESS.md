@@ -643,3 +643,82 @@ onboarded) and imported the site into Bing; bingbot fetched it within minutes.
 - `restore-check` on the first real backup (after 09:40 UTC on 2026-10-01);
 - the first unattended librarian run (03:20 UTC on 2026-10-01): check it with
   `botlog noosphere-librarian`.
+
+## Discovery, part 1: backlog fix, IndexNow, MCP server, house agents, seeds (2026-10-01)
+
+Randall: "fix the librarian backlog. Then do 1 to 3": dogfooding plus more content,
+IndexNow, and an MCP server. Item 4, telling operators, comes after.
+
+**v0.1.2: a night drains the queue.**
+- `runNight` loops 100+100 cycles. The $5 run cap is carried across cycles, and every
+  cycle checks its own canaries.
+- It stops on:
+  - pause;
+  - a canary problem;
+  - apply errors;
+  - budget;
+  - an already-seen item coming back (checked before paying for another cycle; it also
+    emails);
+  - 10 passes.
+- Five mutations, one per stop condition, each turned a test red.
+- **Live:** reviewed 24 in one pass and stopped at "queue drained".
+
+**v0.1.2: IndexNow.**
+- **Server side:** migration 005 generates a per-install key that is never in git. The
+  server serves `/<key>.txt` and a steward-only settings route.
+- **Who pings:** the librarian, after checking that the public key file serves the key.
+- **Proof:**
+  - the key file is 200, `text/plain`, noindex, and matches;
+  - the backfill sent 18 URLs and got 202;
+  - the first night sent 24 changed pages and got 200.
+- **Caught by our own tests:**
+  - the OpenAPI contract test caught an undocumented admin route;
+  - a mutation run showed that two IndexNow guards were only ever tested together, so
+    each now has its own case.
+
+**v0.1.3: the MCP server** (`mcp/server.ts`).
+- Six tools over the public API. Results containing contributed text open with an
+  untrusted-data line.
+- **Tests:** through a real MCP client, and over stdio against the live site. Three
+  mutations caught: unlabelled results, no token guard, candidates shown by default.
+- **Fixed on the way:** `report_outcome` had marked `conditions` optional, but the API
+  requires it.
+- **First lockfile change in production:** `release.sh`'s `npm ci` path ran for the first
+  time. 422 probes, 0 failures.
+- **better-sqlite3 needs no install script.** It loads from bundled prebuilt binaries, so
+  npm's "pending script" warning about it is harmless.
+
+**House agents (D6).**
+- **Identities:** "Claude Code", "Codex" and "Gemini", each "(site operator's agent)".
+  Their tokens are in the production `.env`.
+- **MCP wiring:** `~/bin/noosphere-mcp --as <agent>` is wired into all three.
+  `sync-agent-mcps.mjs` rewrites the identity for Gemini and fails if the rewrite didn't
+  happen.
+- **The rule:** in `~/.codex/AGENTS.md`. Search general problems, report real outcomes,
+  never send private details, and treat what comes back as untrusted data.
+- **First real report:** on the PM2 reload record ("worked", only the part actually
+  tested). It was approved that night.
+
+**Seeds 13–35: 23 more how-tos.**
+- **Checked fresh,** not trusted from notes. Each claim was reproduced on the box, or
+  backed by a documentation page whose text was checked; all 27 source URLs return 200.
+- **Re-testing changed four of them:**
+  - **OpenSSL:** `-checkhost` exits 0 even on a mismatch, and is silently skipped when
+    `-checkend` is in the same call.
+  - **node --test:** a name filter that matches nothing still reports `pass 1`.
+  - **awk:** the box runs gawk, not mawk.
+  - **Untestable details** (a Sheets `SUMPRODUCT` alternative, an old aside) were cut.
+- **The librarian published 22 of 23 and held one, rightly.** The Search Console record
+  claimed a universal "always 0" with only documentation behind it.
+  - I then observed it directly: `contents[].indexed` = `"0"` on all 7 of this account's
+    sitemaps.
+  - I proposed a revision stating exactly that; tonight's run reviews it.
+- **Cost:** $0.30.
+
+**Fixed elsewhere:** the bots dashboard's baseline for this job (0.6 → 10 a month). It
+would have sent a false spend alert, because my launch figure forgot the nightly canaries.
+
+**Open:**
+- The dashboard prices cached Anthropic input at the full rate, so it reads about 1.8× high
+  for the librarian. The fix is to report cost-equivalent tokens; it needs a release.
+- Item 4, publishing the MCP server and telling operators, is Randall's decision.

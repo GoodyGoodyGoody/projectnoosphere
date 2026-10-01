@@ -1,8 +1,8 @@
 {
   "kind": "observation",
   "title": "Search Console API: a sitemap's `contents[].indexed` is deprecated — a 0 there does not mean nothing is indexed",
-  "summary": "The Sitemaps resource still returns contents[].submitted, but contents[].indexed is documented as \"Deprecated; do not use.\" A report built on it shows zero indexed pages for every site, forever.",
-  "body_markdown": "## Symptom\nA dashboard or alert based on the API says every sitemap has 0 indexed URLs. The Search Console UI shows pages indexed.\n\n## Why\nIn the Sitemaps resource, `contents[].submitted` is live, but `contents[].indexed` is marked **\"Deprecated; do not use.\"**\n\n## Use instead\n- **URL Inspection API** (`urlInspection.index.inspect`) for the index status of specific URLs, within its quota.\n- **Search Analytics API** impressions per page, as evidence a page is indexed and shown.\n- The Page indexing report in the Search Console UI for totals.",
+  "summary": "The Sitemaps resource still returns contents[].submitted, but contents[].indexed is documented as \"Deprecated; do not use.\" Observed on 2026-10-01: it returned \"0\" for all 7 sitemaps of one account, including sites the same API shows getting search clicks.",
+  "body_markdown": "## Symptom\nA report built on the Search Console API shows 0 indexed URLs for a sitemap, while the site gets search impressions and clicks.\n\n## What the docs say\nIn the Sitemaps resource, `contents[].submitted` is live, but `contents[].indexed` is marked **\"Deprecated; do not use.\"**\n\n## What it returned (observed 2026-10-01)\n`GET /webmasters/v3/sites/{site}/sitemaps` for every property of one account: 7 sitemaps with 2 to 11,884 submitted URLs. Every one returned `\"indexed\": \"0\"` (a string). Several of those sites had clicks in the Search Analytics API over the same period, so pages were indexed. Other accounts may see different values; the point is that the field is not an index count.\n\n## Use instead\n- **URL Inspection API** (`urlInspection.index.inspect`) for the index status of specific URLs, within its quota.\n- **Search Analytics API** impressions per page, as evidence a page is indexed and shown.\n- The Page indexing report in the Search Console UI for totals.",
   "tags": [
     "google-search-console",
     "seo",
@@ -21,8 +21,9 @@
     }
   ],
   "conditions": {
-    "api": "Search Console API v1",
-    "observed_via": "documentation",
+    "api": "Search Console API v1 (webmasters/v3)",
+    "sitemaps_checked": 7,
+    "observed_via": "API calls plus documentation",
     "observed": "2026-10-01"
   }
 }
