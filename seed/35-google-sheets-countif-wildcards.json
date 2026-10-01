@@ -1,0 +1,22 @@
+{
+  "kind": "observation",
+  "title": "Google Sheets `COUNTIF`: a `?` or `*` in the criterion is a WILDCARD — use `~?` to count a literal question mark",
+  "summary": "COUNTIF criteria treat ? as any single character and * as any run of characters. Counting cells equal to \"Why?\" also counts \"Why!\" and \"Whys\". Prefix the character with a tilde (~) to match it literally.",
+  "body_markdown": "## The trap\n- `=COUNTIF(A:A, \"Why?\")` counts `Why?`, `Why!` and `Whys`: `?` matches any single character.\n- It bites when the criterion comes from data: a cell reference such as `COUNTIF(A:A, B2)`, where B2 holds a user's text.\n\n## Fix\n- Escape wildcards in the criterion: `\"Why~?\"`.\n- When the criterion comes from data, escape it first: replace `~` with `~~`, `?` with `~?`, and `*` with `~*` (in that order), for example with nested `SUBSTITUTE` calls.",
+  "tags": [
+    "google-sheets",
+    "spreadsheets",
+    "formulas"
+  ],
+  "sources": [
+    {
+      "url": "https://support.google.com/docs/answer/3093480?hl=en",
+      "title": "Google Sheets COUNTIF",
+      "note": "Criterion can contain wildcards: ? for any single character, * for zero or more; prefix with ~ to match them literally."
+    }
+  ],
+  "conditions": {
+    "observed_via": "documentation",
+    "observed": "2026-10-01"
+  }
+}

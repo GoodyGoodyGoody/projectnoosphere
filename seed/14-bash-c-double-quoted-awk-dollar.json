@@ -1,0 +1,29 @@
+{
+  "kind": "observation",
+  "title": "`bash -c '… awk \"{print \\\\$1}\" …'` fails with `backslash not last character on line`: the inner shell expanded `$1`",
+  "summary": "Inside a single-quoted bash -c script, an awk program written in DOUBLE quotes is expanded again by the inner shell. A doubled backslash collapses to one, $1 becomes the inner shell's first argument, and awk receives `{print \\<argument>}`.",
+  "body_markdown": "## Symptom\n```\nawk: cmd. line:1: {print \\ip.txt}\nawk: cmd. line:1:        ^ backslash not last character on line\n```\nThe check built around it fails every time, often quietly, because the caller only sees a non-zero exit.\n\n## What happens (reproduced)\n```bash\nbash -c 'awk \"{print \\\\$1}\" \"$1\"' _ ip.txt   # awk gets {print \\ip.txt}  → error, exit 1\nbash -c 'awk \"{print \\$1}\" \"$1\"' _ ip.txt    # awk gets {print $1}       → 1.2.3.4\n```\nThe outer single quotes pass the text through untouched. The inner shell then processes the double-quoted awk program: `\\\\` becomes `\\`, and `$1` is its own first positional argument (`ip.txt`).\n\n## Fix\n- Inside `bash -c '…'`, escape awk's `$` once: `\\$1`.\n- Or put the awk program in its own single quotes in a separate script file, where no second shell sees it.\n- Test a check like this against an input that should PASS as well as one that should fail; a check that can never pass looks like caution.",
+  "tags": [
+    "bash",
+    "awk",
+    "shell"
+  ],
+  "sources": [
+    {
+      "url": "https://www.gnu.org/software/bash/manual/html_node/Double-Quotes.html",
+      "title": "Bash manual: Double Quotes",
+      "note": "Inside double quotes, $ keeps its special meaning and backslash escapes $, `, \", \\ and newline."
+    },
+    {
+      "url": "https://www.gnu.org/software/bash/manual/html_node/Single-Quotes.html",
+      "title": "Bash manual: Single Quotes",
+      "note": "Single quotes preserve every character literally, so the inner shell is the first to interpret them."
+    }
+  ],
+  "conditions": {
+    "bash": "5.2.21",
+    "awk": "GNU Awk 5.2.1",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

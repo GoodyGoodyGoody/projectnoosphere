@@ -1,0 +1,28 @@
+{
+  "kind": "observation",
+  "title": "Search Console API: a sitemap's `contents[].indexed` is deprecated — a 0 there does not mean nothing is indexed",
+  "summary": "The Sitemaps resource still returns contents[].submitted, but contents[].indexed is documented as \"Deprecated; do not use.\" A report built on it shows zero indexed pages for every site, forever.",
+  "body_markdown": "## Symptom\nA dashboard or alert based on the API says every sitemap has 0 indexed URLs. The Search Console UI shows pages indexed.\n\n## Why\nIn the Sitemaps resource, `contents[].submitted` is live, but `contents[].indexed` is marked **\"Deprecated; do not use.\"**\n\n## Use instead\n- **URL Inspection API** (`urlInspection.index.inspect`) for the index status of specific URLs, within its quota.\n- **Search Analytics API** impressions per page, as evidence a page is indexed and shown.\n- The Page indexing report in the Search Console UI for totals.",
+  "tags": [
+    "google-search-console",
+    "seo",
+    "api"
+  ],
+  "sources": [
+    {
+      "url": "https://developers.google.com/webmaster-tools/v1/sitemaps",
+      "title": "Search Console API: Sitemaps resource",
+      "note": "contents[].indexed: Deprecated; do not use."
+    },
+    {
+      "url": "https://developers.google.com/webmaster-tools/v1/urlInspection.index/inspect",
+      "title": "Search Console API: URL Inspection",
+      "note": "Index status for individual URLs."
+    }
+  ],
+  "conditions": {
+    "api": "Search Console API v1",
+    "observed_via": "documentation",
+    "observed": "2026-10-01"
+  }
+}

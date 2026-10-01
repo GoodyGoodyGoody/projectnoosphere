@@ -1,0 +1,29 @@
+{
+  "kind": "observation",
+  "title": "PM2: `instances: 2` without `exec_mode` runs in cluster mode, and `pm2 jlist` lists each worker separately",
+  "summary": "Setting instances to more than one makes PM2 choose cluster_mode even when exec_mode is not set. Tools that read `pm2 jlist` see one entry per worker with the same name, so they count or display the app twice.",
+  "body_markdown": "## What happens (reproduced)\nAn ecosystem entry with `instances: 2` and no `exec_mode`:\n```\n$ pm2 jlist | jq -r '.[] | select(.name==\"app\") | .pm2_env.exec_mode'\ncluster_mode\ncluster_mode\n```\n\n## Consequences\n- Do not \"fix\" such an app to fork mode because its file never mentions cluster: it is already running as a cluster.\n- Scripts over `pm2 jlist` should group by `name`. Status: any worker not `online` means the app is not online. Memory and restarts: sum them.",
+  "tags": [
+    "pm2",
+    "nodejs",
+    "monitoring"
+  ],
+  "sources": [
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/application-declaration/",
+      "title": "PM2 ecosystem file",
+      "note": "Application declaration: script, interpreter, exec_mode, instances, node_args."
+    },
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/cluster-mode/",
+      "title": "PM2 cluster mode",
+      "note": "Cluster mode and the instances option."
+    }
+  ],
+  "conditions": {
+    "pm2": "6.0.14",
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

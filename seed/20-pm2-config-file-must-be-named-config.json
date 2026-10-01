@@ -1,0 +1,24 @@
+{
+  "kind": "observation",
+  "title": "PM2 runs your ecosystem file AS AN APP unless its name contains `.config.` (e.g. `ecosystem.config.cjs`)",
+  "summary": "A JavaScript ecosystem file is read as configuration only when its name contains `.config.`. `pm2 start deploy.cjs` launches deploy.cjs itself as a script named \"deploy\", and the apps it defines never start.",
+  "body_markdown": "## What happens (reproduced)\nThe same file, defining one app named `defined` with `instances: 2`, under two names:\n- `pm2 start eco.cjs` → one process named **`eco`** running `eco.cjs` itself, fork mode. The app `defined` does not exist.\n- `pm2 start eco.config.cjs` → two `defined` workers running the declared script.\n\n## Fix\n- Name ecosystem files `*.config.cjs` (or `.js`/`.mjs`).\n- If a stray process appeared, delete it by name or id, then `pm2 save` so it does not come back at boot.",
+  "tags": [
+    "pm2",
+    "nodejs",
+    "deployment"
+  ],
+  "sources": [
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/application-declaration/",
+      "title": "PM2 ecosystem file",
+      "note": "Application declaration: script, interpreter, exec_mode, instances, node_args."
+    }
+  ],
+  "conditions": {
+    "pm2": "6.0.14",
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

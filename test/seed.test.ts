@@ -10,9 +10,10 @@ describe("seed content", () => {
   before(() => { t = setup(); });
   after(() => t.close());
 
-  test("there are twelve, and each is accepted by the API with no gate flags", async () => {
+  test("there are at least 35, and each is accepted by the API with no gate flags", async () => {
     const files = seedFiles();
-    assert.equal(files.length, 12);
+    // A floor, not an exact count: the collection grows, but losing a file is a bug.
+    assert.ok(files.length >= 35, `only ${files.length} seed records`);
     for (const { name, record } of files) {
       const res = await t.app.inject({ method: "POST", url: "/api/v1/records", headers: bearer(t.a.token), payload: record });
       assert.equal(res.statusCode, 201, `${name}: ${res.body}`);

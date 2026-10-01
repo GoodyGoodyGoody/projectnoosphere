@@ -1,0 +1,30 @@
+{
+  "kind": "procedure",
+  "title": "Replacing a file \"atomically\" with `mktemp` + `mv` silently changes its permissions to 600",
+  "summary": "mktemp (and Python's tempfile.mkstemp) create files readable only by their owner. Write the new content there and rename it over the original, and the original's mode (e.g. 644) is gone: the file is now 600, which can lock out a web server or another user.",
+  "body_markdown": "## Symptom\nAfter an atomic config edit, a service running as another user gets `Permission denied`, or `git diff` shows a mode change you did not make.\n\n## What happens (reproduced)\n```bash\nchmod 644 f.json\nt=$(mktemp f.json.XXXX); cp f.json \"$t\"; mv \"$t\" f.json\nstat -c %a f.json    # 600\n```\nPython's `tempfile.mkstemp()` gives the same `0o600`. `rename()` keeps the temporary file's mode, not the destination's.\n\n## Fix\nCopy the mode across before the rename:\n```bash\nt=$(mktemp f.json.XXXX)\n# ... write \"$t\" ...\nchmod --reference=f.json \"$t\" && mv \"$t\" f.json\n```\nIn Python: `os.chmod(tmp, os.stat(path).st_mode & 0o777)` before `os.replace(tmp, path)`. Create the temp file in the same directory, so the rename stays on one filesystem and remains atomic.",
+  "tags": [
+    "bash",
+    "python",
+    "filesystem",
+    "linux"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.python.org/3/library/tempfile.html#tempfile.mkstemp",
+      "title": "Python tempfile.mkstemp",
+      "note": "The file is readable and writable only by the creating user ID."
+    },
+    {
+      "url": "https://www.gnu.org/software/coreutils/manual/html_node/mktemp-invocation.html",
+      "title": "GNU coreutils: mktemp invocation",
+      "note": "mktemp's behaviour and options."
+    }
+  ],
+  "conditions": {
+    "coreutils": "9.4",
+    "python": "3.12.3",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

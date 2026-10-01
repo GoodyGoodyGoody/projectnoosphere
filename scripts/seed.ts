@@ -3,7 +3,10 @@
 // its name, so re-running never creates duplicates. They arrive as candidates
 // and go through the librarian like everything else.
 //
-//   NOOSPHERE_API_BASE=http://127.0.0.1:3012 NOOSPHERE_SEED_TOKEN=nsp_… node scripts/seed.ts
+//   NOOSPHERE_API_BASE=http://127.0.0.1:3012 NOOSPHERE_SEED_TOKEN=nsp_… node scripts/seed.ts [--from 13]
+//
+// --from N skips files numbered below N. Replays are free of duplicates but not
+// of rate limits (30 writes/hour per contributor), so send only the new ones.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -18,8 +21,11 @@ if (import.meta.main) {
   const base = process.env.NOOSPHERE_API_BASE ?? "http://127.0.0.1:3012";
   const token = process.env.NOOSPHERE_SEED_TOKEN;
   if (!token) throw new Error("NOOSPHERE_SEED_TOKEN is not set");
+  const fromArg = process.argv.indexOf("--from");
+  const from = fromArg > 0 ? Number(process.argv[fromArg + 1]) : 0;
+  if (!Number.isInteger(from) || from < 0) throw new Error("--from takes a file number, e.g. --from 13");
   let failed = 0;
-  for (const { name, record } of seedFiles()) {
+  for (const { name, record } of seedFiles().filter((f) => Number(f.name.slice(0, 2)) >= from)) {
     const res = await fetch(`${base}/api/v1/records`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json", "idempotency-key": `seed:${name}` },

@@ -1,0 +1,29 @@
+{
+  "kind": "observation",
+  "title": "An uptime check through nginx can say \"200 OK\" while the app is down: `proxy_cache_use_stale` serves the cached page",
+  "summary": "With proxy_cache_use_stale error timeout http_502 …, nginx answers from the stale cache when the upstream fails. A monitor that probes a cached page through nginx keeps seeing 200 for as long as the cache holds that page, while every uncached request fails.",
+  "body_markdown": "## Why\n`proxy_cache_use_stale` determines in which cases a stale cached response can be used when talking to the proxied server fails. That is good for visitors, but it also hides the outage from any probe that hits the same cached URL.\n\n## Fix\n- Probe a health path that is not cached (no `proxy_cache` in its location), or one the app answers with `Cache-Control: no-store`.\n- Or probe the app's own port from the host, in addition to the public URL.\n- To see what a probe actually measured, log or return `$upstream_cache_status` (`HIT`, `STALE`, `BYPASS`, `MISS`).\n- `proxy_cache_bypass` defines when a response is not taken from the cache; a probe can send a header it matches.\n\nA health check is only as good as its ability to fail. Stop the app once in a maintenance window and watch the monitor go red.",
+  "tags": [
+    "nginx",
+    "monitoring",
+    "caching",
+    "uptime"
+  ],
+  "sources": [
+    {
+      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_use_stale",
+      "title": "nginx: proxy_cache_use_stale",
+      "note": "In which cases a stale cached response can be used during communication with the proxied server."
+    },
+    {
+      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_bypass",
+      "title": "nginx: proxy_cache_bypass",
+      "note": "Conditions under which the response will not be taken from a cache."
+    }
+  ],
+  "conditions": {
+    "nginx": "1.24",
+    "observed_via": "documentation",
+    "observed": "2026-10-01"
+  }
+}

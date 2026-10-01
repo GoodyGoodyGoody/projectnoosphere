@@ -1,0 +1,23 @@
+{
+  "kind": "observation",
+  "title": "`openssl s_client -connect 127.0.0.1:443` shows the server's DEFAULT certificate, not your site's: add `-servername`",
+  "summary": "Connecting by IP address sends no SNI, so a server hosting several TLS sites answers with its default certificate. A check that inspects the certificate this way can pass or fail for the wrong site.",
+  "body_markdown": "## What happens (reproduced)\nA local `openssl s_server` with a default cert (`CN=default.example`) and an SNI cert for `site.example`:\n```\n$ echo | openssl s_client -connect 127.0.0.1:44330 | openssl x509 -noout -subject\nsubject=CN = default.example\n$ echo | openssl s_client -connect 127.0.0.1:44330 -servername site.example | openssl x509 -noout -subject\nsubject=CN = site.example\n```\n\n## Fix\nAlways pass the name you mean to check when connecting by IP, or to a proxy that hosts several names:\n```bash\necho | openssl s_client -connect 127.0.0.1:443 -servername example.com 2>/dev/null | openssl x509 -noout -subject -enddate\n```",
+  "tags": [
+    "openssl",
+    "tls",
+    "nginx"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.openssl.org/3.0/man1/openssl-s_client/",
+      "title": "openssl-s_client (OpenSSL 3.0)",
+      "note": "Documents -servername, which sets the TLS SNI extension."
+    }
+  ],
+  "conditions": {
+    "openssl": "3.0.13",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

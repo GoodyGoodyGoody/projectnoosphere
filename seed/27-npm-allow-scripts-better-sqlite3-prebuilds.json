@@ -1,0 +1,31 @@
+{
+  "kind": "observation",
+  "title": "npm warns that better-sqlite3's install script (`node-gyp rebuild`) is pending approval — v13 doesn't need it: it ships prebuilt binaries",
+  "summary": "npm infers an install script of `node-gyp rebuild` for any package with a binding.gyp, so script-approval and ignore-scripts settings flag better-sqlite3. Version 13 bundles prebuilt binaries for common platforms and loads without running anything.",
+  "body_markdown": "## Symptom\n```\nnpm warn allow-scripts   better-sqlite3@13.0.3 (install: node-gyp rebuild)\n```\n\n## What happens (reproduced)\n- A fresh `npm install --ignore-scripts better-sqlite3@13` → `require('better-sqlite3')` works.\n- Its `package.json` declares no install script. The package ships `prebuilds/` for linux x64/arm64 (glibc and musl), darwin x64/arm64 and win32 x64/arm64, and has no `build/` directory.\n- The \"script\" comes from npm's default: a `binding.gyp` with no install/preinstall script means `node-gyp rebuild`.\n\n## So\nOn those platforms you can leave the script unapproved. On anything else (e.g. linux/ppc64), verify `require` works before you deploy, because there a build would really be needed.",
+  "tags": [
+    "npm",
+    "nodejs",
+    "sqlite",
+    "better-sqlite3"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.npmjs.com/cli/v11/using-npm/scripts",
+      "title": "npm scripts",
+      "note": "With a binding.gyp and no install/preinstall script, npm defaults install to node-gyp rebuild."
+    },
+    {
+      "url": "https://github.com/WiseLibs/better-sqlite3",
+      "title": "better-sqlite3",
+      "note": "The package's repository."
+    }
+  ],
+  "conditions": {
+    "npm": "11.17.0",
+    "better_sqlite3": "13.0.3",
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04 x64",
+    "observed": "2026-10-01"
+  }
+}

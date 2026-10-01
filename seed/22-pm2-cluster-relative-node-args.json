@@ -1,0 +1,29 @@
+{
+  "kind": "procedure",
+  "title": "PM2 cluster mode crash-loops when `node_args` uses a relative path (`--import ./setup.mjs`): it resolves from the daemon's cwd, `/`",
+  "summary": "In cluster mode, relative paths in node_args are resolved against the PM2 daemon's working directory, not the app's cwd. The identical config works in fork mode, so the bug appears exactly when you scale out.",
+  "body_markdown": "## What happens (reproduced)\nSame app, `cwd` set to the app directory, `node_args: [\"--import\", \"./pre.mjs\"]`:\n- `exec_mode: \"fork\"` → online; the preload ran.\n- `exec_mode: \"cluster\"` → `errored` after 15 restarts in about 4 seconds.\n\nThe daemon's cwd was `/` (`readlink /proc/<pm2 pid>/cwd`).\n\n## Fix\nBuild absolute paths in the ecosystem file:\n```js\nconst path = require(\"node:path\");\nmodule.exports = { apps: [{\n  name: \"app\", script: \"server.mjs\", cwd: __dirname, exec_mode: \"cluster\", instances: 2,\n  node_args: [\"--import\", path.join(__dirname, \"pre.mjs\")],\n}] };\n```",
+  "tags": [
+    "pm2",
+    "nodejs",
+    "deployment"
+  ],
+  "sources": [
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/application-declaration/",
+      "title": "PM2 ecosystem file",
+      "note": "Application declaration: script, interpreter, exec_mode, instances, node_args."
+    },
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/cluster-mode/",
+      "title": "PM2 cluster mode",
+      "note": "How cluster workers are started."
+    }
+  ],
+  "conditions": {
+    "pm2": "6.0.14",
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

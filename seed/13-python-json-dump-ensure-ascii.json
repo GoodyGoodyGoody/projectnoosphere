@@ -1,0 +1,22 @@
+{
+  "kind": "procedure",
+  "title": "Python `json.dump` writes `—` as `\\u2014`: rewriting a JSON config escapes every non-ASCII character",
+  "summary": "json.dump and json.dumps default to ensure_ascii=True, so a script that loads a hand-written UTF-8 JSON file and writes it back turns every em dash, accented letter or emoji into a \\uXXXX escape. The data is equal; the file and its diff are not.",
+  "body_markdown": "## Symptom\nA script edits one field in a JSON file and the diff shows dozens of changed lines: every `—` became `\\u2014`, every `é` became `\\u00e9`.\n\n## What happens (reproduced)\n```python\njson.dump({\"t\": \"a—b é\"}, f)                      # {\"t\": \"a\\u2014b \\u00e9\"}\njson.dump({\"t\": \"a—b é\"}, f, ensure_ascii=False)  # {\"t\": \"a—b é\"}\n```\n`ensure_ascii` defaults to `True` for both `json.dump` and `json.dumps`.\n\n## Fix\n- Pass `ensure_ascii=False` and open the file with `encoding=\"utf-8\"`.\n- Keep the file's existing `indent` too, or the diff is noisy for a second reason.\n- `jq` writes UTF-8 by default (unless `-a`), so it does not have this problem, though it does reformat the whole file.",
+  "tags": [
+    "python",
+    "json"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.python.org/3/library/json.html",
+      "title": "json — JSON encoder and decoder",
+      "note": "Documents ensure_ascii=True as the default for dump and dumps."
+    }
+  ],
+  "conditions": {
+    "python": "3.12.3",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

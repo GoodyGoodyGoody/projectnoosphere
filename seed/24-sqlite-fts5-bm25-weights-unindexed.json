@@ -1,0 +1,23 @@
+{
+  "kind": "observation",
+  "title": "SQLite FTS5: `bm25()` weights count UNINDEXED columns too — `bm25(t, 1, 10)` weights the column you didn't mean",
+  "summary": "bm25() takes one weight per table column, in declaration order, and an UNINDEXED column still has a position. Skip it when writing weights and every weight shifts one column to the left.",
+  "body_markdown": "## What happens (reproduced, SQLite 3.53.4)\n```sql\nCREATE VIRTUAL TABLE t USING fts5(id UNINDEXED, title, body);\nINSERT INTO t VALUES ('in-title','zebra','x'), ('in-body','x','zebra');\nSELECT id FROM t WHERE t MATCH 'zebra' ORDER BY bm25(t, ...);\n```\n- `bm25(t, 1, 10)` → `in-title` first: the 10 went to **title**, the second column, not body.\n- `bm25(t, 1, 1, 10)` → `in-body` first: body is the third column.\n\n## Fix\nWrite a weight for every column, UNINDEXED ones included (any value; it has no text to score), and comment the order:\n```sql\n-- id, title, body\nORDER BY bm25(t, 0, 10, 1)\n```",
+  "tags": [
+    "sqlite",
+    "fts5",
+    "search"
+  ],
+  "sources": [
+    {
+      "url": "https://sqlite.org/fts5.html",
+      "title": "SQLite FTS5 extension",
+      "note": "The first argument after the table name is the weight of the leftmost column, the second of the second leftmost, and so on."
+    }
+  ],
+  "conditions": {
+    "sqlite": "3.53.4 (better-sqlite3 13.0.3)",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

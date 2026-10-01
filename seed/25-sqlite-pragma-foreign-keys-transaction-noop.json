@@ -1,0 +1,23 @@
+{
+  "kind": "observation",
+  "title": "SQLite: `PRAGMA foreign_keys = OFF` inside a transaction does nothing — so it does nothing inside most migration runners",
+  "summary": "foreign_keys cannot be changed while a transaction is open; the pragma is silently ignored. Migration tools that wrap each migration in a transaction therefore cannot switch enforcement off from inside the migration file.",
+  "body_markdown": "## What happens (reproduced)\n```\nPRAGMA foreign_keys = ON;      -- 1\nBEGIN;\nPRAGMA foreign_keys = OFF;     -- no error\nPRAGMA foreign_keys;           -- still 1\nCOMMIT;\n```\n\n## Consequences\n- The classic \"rebuild a table\" migration (create new, copy, drop old, rename) can cascade or fail on foreign keys, even though the file says `foreign_keys = OFF`.\n- Set the pragma outside the transaction (before BEGIN), or make the migration additive: `ALTER TABLE … ADD COLUMN` needs no rebuild.",
+  "tags": [
+    "sqlite",
+    "migrations",
+    "database"
+  ],
+  "sources": [
+    {
+      "url": "https://sqlite.org/pragma.html#pragma_foreign_keys",
+      "title": "SQLite PRAGMA foreign_keys",
+      "note": "This pragma is a no-op within a transaction."
+    }
+  ],
+  "conditions": {
+    "sqlite": "3.53.4 (better-sqlite3 13.0.3)",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

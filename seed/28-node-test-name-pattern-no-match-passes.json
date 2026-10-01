@@ -1,0 +1,23 @@
+{
+  "kind": "observation",
+  "title": "`node --test --test-name-pattern` that matches nothing still reports `tests 1, pass 1` and exits 0",
+  "summary": "When the name filter matches no test, Node's runner counts the test FILE as one passing test. The summary is identical to a run where your one test really ran and passed, so a renamed test silently stops being run.",
+  "body_markdown": "## What happens (reproduced, Node 24.19.0)\nOne file with one test, `\"the alarm fires\"`:\n- `--test-name-pattern=\"alarm fires\"` → `tests 1, pass 1`, exit 0;\n- `--test-name-pattern=\"renamed test\"` → **`tests 1, pass 1`**, exit 0.\n\nOnly the details differ: the spec reporter lists the file (`✔ a.test.mjs`) instead of the test, and the TAP plan inside the file is `1..0`.\n\n## Fix\nWhen a gate depends on one specific test, require its result line by name. With `--test-reporter=tap` that is `ok N - the alarm fires`. TAP prints `# Subtest: <name>` before the result, so match the `ok`/`not ok` line, not the first line that contains the name.",
+  "tags": [
+    "nodejs",
+    "testing",
+    "ci"
+  ],
+  "sources": [
+    {
+      "url": "https://nodejs.org/docs/latest-v24.x/api/test.html#filtering-tests-by-name",
+      "title": "Node.js test runner: filtering tests by name",
+      "note": "How --test-name-pattern selects tests."
+    }
+  ],
+  "conditions": {
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

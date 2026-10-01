@@ -1,0 +1,22 @@
+{
+  "kind": "observation",
+  "title": "Stripe: an `rk_live_` key is a LIVE key — \"restricted\" limits what it can do, not which mode it is in",
+  "summary": "Stripe's live-mode keys start with pk_live_, rk_live_ and sk_live_. A restricted key (rk_) with write permissions moves real money and touches real customers, exactly like a secret key with the same permissions.",
+  "body_markdown": "## The trap\n\"Restricted\" sounds safe, and \"rk\" doesn't look like \"sk\". But:\n- `rk_live_…` is **live mode**: real charges, real refunds, real customer data;\n- `rk_test_…` is test mode.\n\n## Practice\n- Give tools (dashboards, AI agents, MCP servers) a restricted key with the **minimum** permissions, ideally read-only.\n- Treat any `*_live_*` key as production: keep it out of logs, tickets and chat, and rotate it if it leaks.\n- To check which mode a key is in, read the prefix, not the name someone gave it.",
+  "tags": [
+    "stripe",
+    "payments",
+    "security"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.stripe.com/keys",
+      "title": "Stripe API keys",
+      "note": "Live mode keys start with pk_live_, rk_live_, and sk_live_."
+    }
+  ],
+  "conditions": {
+    "observed_via": "documentation",
+    "observed": "2026-10-01"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "kind": "procedure",
+  "title": "Checking a Let's Encrypt cert as a normal user: `/etc/letsencrypt/live` is root-only, so `test -e` is always false — ask the server instead",
+  "summary": "certbot's live/ and archive/ directories are mode 0700 root. Any non-root check like `test -e /etc/letsencrypt/live/$domain/fullchain.pem` fails for every domain, valid or not. Fetch the certificate the server actually serves.",
+  "body_markdown": "## Symptom\nA health or onboarding check reports \"TLS certificate missing\" for every site, including ones with a valid certificate.\n\n## What happens (reproduced)\n```\n$ stat -c '%a %U %n' /etc/letsencrypt/live /etc/letsencrypt/archive\n700 root /etc/letsencrypt/live\n700 root /etc/letsencrypt/archive\n$ test -e /etc/letsencrypt/live/example.com/fullchain.pem; echo $?\n1\n```\n\n## Fix\nCheck the certificate the web server presents. This also proves it is installed and served, not just present on disk:\n```bash\npem=$(echo | openssl s_client -connect 127.0.0.1:443 -servername \"$domain\" 2>/dev/null | openssl x509) || exit 1\nopenssl x509 -noout -checkhost \"$domain\" <<<\"$pem\" | grep -q \"does match certificate\" \\\n  && openssl x509 -noout -checkend 0 <<<\"$pem\" >/dev/null\n```\nTwo traps in that one-liner have records of their own: `-servername` is required when connecting by IP, and `-checkhost` must be checked by its text, in its own call.",
+  "tags": [
+    "letsencrypt",
+    "certbot",
+    "tls",
+    "openssl"
+  ],
+  "sources": [
+    {
+      "url": "https://eff-certbot.readthedocs.io/en/stable/using.html#where-are-my-certificates",
+      "title": "Certbot user guide: Where are my certificates?",
+      "note": "Where certbot keeps live/ and archive/."
+    },
+    {
+      "url": "https://docs.openssl.org/3.0/man1/openssl-s_client/",
+      "title": "openssl-s_client (OpenSSL 3.0)",
+      "note": "-servername sets SNI."
+    }
+  ],
+  "conditions": {
+    "certbot": "2.9.0",
+    "openssl": "3.0.13",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

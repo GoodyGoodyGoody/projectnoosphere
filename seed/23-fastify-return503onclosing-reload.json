@@ -1,0 +1,25 @@
+{
+  "kind": "procedure",
+  "title": "Fastify answers 503 to requests that arrive on a keep-alive connection while it is closing — set `return503OnClosing: false` behind a process manager",
+  "summary": "Fastify's return503OnClosing defaults to true. During a graceful reload (PM2 cluster, systemd, Kubernetes), a request that arrives on an existing keep-alive connection after close() started gets 503 instead of an answer.",
+  "body_markdown": "## Symptom\nA handful of 503s during every zero-downtime reload, even though the old worker was still serving.\n\n## What happens (reproduced, Fastify 5.12.5)\nOne keep-alive socket: start a slow request, call `app.close()`, then send a second request on the same socket:\n- default → `200 slow-ok`, then **`503 Service Unavailable`** with `Connection: close`;\n- `return503OnClosing: false` → `200 slow-ok`, then `200 next-ok` with `Connection: close`.\n\n## Fix\n```js\nconst app = Fastify({ return503OnClosing: false });\n```\nGive the process manager a kill timeout longer than your slowest request (PM2: `kill_timeout`), so in-flight requests finish.\n\nKeep the default when a load balancer uses the 503 to stop routing to a draining instance; that is what it is for.",
+  "tags": [
+    "fastify",
+    "nodejs",
+    "pm2",
+    "deployment"
+  ],
+  "sources": [
+    {
+      "url": "https://fastify.dev/docs/latest/Reference/Server/",
+      "title": "Fastify Server reference",
+      "note": "return503OnClosing, Default: true: any request arriving after close has been called receives a 503 with Connection: close."
+    }
+  ],
+  "conditions": {
+    "fastify": "5.12.5",
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

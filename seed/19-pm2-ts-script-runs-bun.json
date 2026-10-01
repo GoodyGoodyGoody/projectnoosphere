@@ -1,0 +1,25 @@
+{
+  "kind": "procedure",
+  "title": "PM2 6: `pm2 start app.ts` fails with `Interpreter bun is NOT AVAILABLE in PATH` — set `interpreter: \"node\"`",
+  "summary": "PM2 6 picks bun as the interpreter for .ts scripts. Without bun installed, the app never starts, even though Node 24 runs .ts files natively.",
+  "body_markdown": "## Symptom\n```\n[PM2][ERROR] Interpreter bun is NOT AVAILABLE in PATH. (type 'which bun' to double check.)\n```\nThe app does not appear in `pm2 jlist` at all.\n\n## What happens (reproduced)\n- `pm2 start app.ts` → the error above; nothing starts.\n- `pm2 start app.ts --interpreter node` → online, and the process reports `node v24.19.0`.\n\n## Fix\nIn the ecosystem file:\n```js\n{ name: \"app\", script: \"src/server.ts\", interpreter: \"node\" }\n```\nBun was not installed on the box where this was observed. Where it is, the same default would run your TypeScript on bun rather than node, so check `pm2 jlist` → `pm2_env.exec_interpreter`.",
+  "tags": [
+    "pm2",
+    "typescript",
+    "nodejs",
+    "bun"
+  ],
+  "sources": [
+    {
+      "url": "https://pm2.keymetrics.io/docs/usage/application-declaration/",
+      "title": "PM2 ecosystem file",
+      "note": "Application declaration: script, interpreter, exec_mode, instances, node_args."
+    }
+  ],
+  "conditions": {
+    "pm2": "6.0.14",
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "kind": "procedure",
+  "title": "Node's built-in `fetch` gives up after 300 s waiting for headers (`UND_ERR_HEADERS_TIMEOUT`), even with no timeout set",
+  "summary": "Node's fetch is undici, whose headersTimeout and bodyTimeout default to 300 seconds. A slow upstream (a long generation, a big export) fails at five minutes with `TypeError: fetch failed`, even though your code set no timeout. AbortSignal can only shorten it; pass a dispatcher to lengthen it.",
+  "body_markdown": "## Symptom\n```\nTypeError: fetch failed\n  cause: HeadersTimeoutError  code: 'UND_ERR_HEADERS_TIMEOUT'\n```\nIt arrives at almost exactly 300 s, every time.\n\n## What happens (reproduced, Node 24.19.0)\n- A local server that sends headers after 330 s: `fetch()` rejected after **300.9 s** with `UND_ERR_HEADERS_TIMEOUT`.\n- undici documents `bodyTimeout` with the same 300 s default; it measures the gap between body chunks. That half was not reproduced here.\n\n## Fix\nPass an undici `Agent` as `dispatcher` (the npm `undici` package; the built-in fetch accepts it):\n```js\nimport { Agent } from \"undici\";\nconst slow = new Agent({ headersTimeout: 15 * 60_000, bodyTimeout: 15 * 60_000 });\nconst res = await fetch(url, { dispatcher: slow });\n```\nVerified with undici 7.30.0 on Node 24.19.0: a 2 s `headersTimeout` cut a 5 s response off at 2.5 s, and a 10 s one let it through.\n\nBetter still, for work that really takes minutes: start a job, then poll or stream.",
+  "tags": [
+    "nodejs",
+    "fetch",
+    "undici",
+    "http"
+  ],
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/nodejs/undici/main/docs/docs/api/Client.md",
+      "title": "undici Client options",
+      "note": "headersTimeout and bodyTimeout: Default 300e3 (ms); 0 disables."
+    },
+    {
+      "url": "https://nodejs.org/docs/latest-v24.x/api/globals.html#fetch",
+      "title": "Node.js fetch",
+      "note": "Node's global fetch."
+    }
+  ],
+  "conditions": {
+    "node": "24.19.0",
+    "undici": "7.30.0 (for the dispatcher)",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

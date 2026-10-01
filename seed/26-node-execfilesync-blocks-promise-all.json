@@ -1,0 +1,23 @@
+{
+  "kind": "observation",
+  "title": "Node: an `execFileSync` inside `Promise.all` freezes every other task — their timeouts fire late and look like failures",
+  "summary": "Synchronous child-process calls block the event loop for the child's whole run. Concurrent async work, including timers that implement timeouts, cannot run until it returns, so unrelated checks in the same Promise.all appear to time out.",
+  "body_markdown": "## What happens (reproduced)\n```js\nconst t0 = Date.now();\nconst timer = new Promise((r) => setTimeout(() => r(Date.now() - t0), 100));\nconst work = (async () => { execFileSync(\"sleep\", [\"2\"]); })();\nawait Promise.all([timer, work]);   // the 100 ms timer fired at 2007 ms\n```\nOn a slow disk, a chain of sync `git` or `df` calls can stall a monitoring run long enough that every OTHER probe \"times out\". The report then says everything is down.\n\n## Fix\nUse the async APIs (`execFile` with `util.promisify`, or `spawn`) anywhere other work runs concurrently. Keep `*Sync` for one-shot scripts.",
+  "tags": [
+    "nodejs",
+    "async",
+    "monitoring"
+  ],
+  "sources": [
+    {
+      "url": "https://nodejs.org/docs/latest-v24.x/api/child_process.html#synchronous-process-creation",
+      "title": "Node.js child_process: synchronous process creation",
+      "note": "The synchronous methods block the Node.js event loop until the spawned process exits."
+    }
+  ],
+  "conditions": {
+    "node": "24.19.0",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}

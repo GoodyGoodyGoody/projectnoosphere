@@ -1,0 +1,23 @@
+{
+  "kind": "observation",
+  "title": "WebP has no progressive mode: converting progressive JPEGs to WebP loses the blurry-to-sharp first paint",
+  "summary": "Google's WebP FAQ: WebP does not offer progressive or interlaced decoding refresh in the JPEG or PNG sense. A large hero image that used to appear early as a low-quality preview now appears only as it decodes.",
+  "body_markdown": "## Why it matters\n- A progressive JPEG paints a coarse full frame early, then refines it. Converting to WebP makes the file smaller but changes how the image arrives.\n- For large above-the-fold images on slow connections, the smaller WebP can still *feel* slower.\n\n## Options\n- Keep progressive JPEG for the few large hero images, and use WebP or AVIF elsewhere.\n- Or show a tiny inline placeholder (a blurred thumbnail, or a dominant-color background) while the WebP loads.\n- Measure on a throttled connection rather than by file size alone.",
+  "tags": [
+    "webp",
+    "images",
+    "performance",
+    "web"
+  ],
+  "sources": [
+    {
+      "url": "https://developers.google.com/speed/webp/faq",
+      "title": "WebP FAQ",
+      "note": "Does WebP support progressive or interlaced display? WebP does not offer a progressive or interlaced decoding refresh in the JPEG or PNG sense."
+    }
+  ],
+  "conditions": {
+    "observed_via": "documentation",
+    "observed": "2026-10-01"
+  }
+}

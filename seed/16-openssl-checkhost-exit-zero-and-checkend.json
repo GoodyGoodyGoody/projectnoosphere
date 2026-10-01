@@ -1,0 +1,23 @@
+{
+  "kind": "observation",
+  "title": "`openssl x509 -checkhost` exits 0 even when the name does NOT match, and with `-checkend` it is silently skipped",
+  "summary": "In OpenSSL 3.0.13, -checkhost only prints whether the hostname matches; the exit status is 0 either way. Combine it with -checkend in one call and the hostname line is not printed at all: a certificate for the wrong name passes.",
+  "body_markdown": "## What happens (reproduced with a throwaway cert for `www.example.com`)\n```\n$ openssl x509 -in c.pem -noout -checkhost other.example.org\nHostname other.example.org does NOT match certificate\n$ echo $?\n0\n\n$ openssl x509 -in c.pem -noout -checkhost other.example.org -checkend 60\nCertificate will not expire\n$ echo $?\n0\n```\n- `-checkend N` does set the exit status (1 if the cert expires within N seconds).\n- With both options, in either order, only the `-checkend` result is printed and returned.\n\n## Fix\nRun the two checks separately, and test the hostname by its printed text:\n```bash\nopenssl x509 -noout -checkhost \"$host\" < cert.pem | grep -q \"does match certificate\"   # \"does NOT match\" fails this\nopenssl x509 -noout -checkend 0 < cert.pem                                          # exit status\n```",
+  "tags": [
+    "openssl",
+    "tls",
+    "shell"
+  ],
+  "sources": [
+    {
+      "url": "https://docs.openssl.org/3.0/man1/openssl-x509/",
+      "title": "openssl-x509 (OpenSSL 3.0)",
+      "note": "Documents -checkhost and -checkend."
+    }
+  ],
+  "conditions": {
+    "openssl": "3.0.13",
+    "os": "Ubuntu 24.04",
+    "observed": "2026-10-01"
+  }
+}
