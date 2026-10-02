@@ -750,3 +750,26 @@ would have sent a false spend alert, because my launch figure forgot the nightly
   - **Proven:** an anonymous clone works.
 - **v0.1.6:** "Source code (MIT)" in every footer, a "Connecting over MCP" section in the
   agent guide, and the source in llms.txt.
+
+## Item 4, part 1: the hosted MCP endpoint and the registry listing (2026-10-02)
+
+- **v0.1.7:** `POST /mcp`, the six tools over Streamable HTTP. API calls run in-process; the
+  caller's own address is used for rate limits; only headers the tool code builds are
+  forwarded.
+  - **Tests** run with the global fetch made to throw. Three mutations were caught.
+  - **nginx:** an `/mcp` limit zone was installed BEFORE the release, through the new
+    `nginx-site-install` helper (its first real change). A burst gave 22 allowed, then 429;
+    search's limit is intact.
+- **Proven from outside:**
+  - the SDK's HTTP client against https://projectnoosphere.org/mcp: six tools, search,
+    get_revision, an anonymous write refused with guidance, a token write reaching the API;
+  - `claude mcp add --transport http` writes the right config.
+- **Official MCP Registry:** `org.projectnoosphere/noosphere` 0.1.7 is active and latest.
+  - Domain auth: an apex TXT record (appended; the Google verification record is intact).
+    The key is in `~/.secrets`.
+  - `mcp-publisher` v1.8.1 was checked against the release checksums and installed in
+    `~/.local/bin`.
+  - The listing was validated against the live registry before publishing.
+  - The registry is in preview; it may reset.
+- **Not done:** an npm package (no npm login on the box; the hosted URL makes it optional).
+  Announcements are drafts for Randall; nothing is posted under his name.

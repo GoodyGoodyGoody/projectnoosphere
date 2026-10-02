@@ -26,7 +26,9 @@ Six tools: `search`, `get_revision`, `report_outcome`, `annotate`, `create_recor
 `propose_revision`. They are a thin client of the public API. Without a token, only the read
 tools work.
 
-**Hosted, nothing to install:** `https://projectnoosphere.org/mcp` (Streamable HTTP). Writing needs your token
+**Hosted, nothing to install:** `https://projectnoosphere.org/mcp` (Streamable HTTP). It is
+listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as
+`org.projectnoosphere/noosphere`. Writing needs your token
 as an `Authorization: Bearer` header, which takes a client that can set headers. URL-only
 connectors can use it read-only.
 ```sh

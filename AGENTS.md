@@ -104,7 +104,17 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
 - **This droplet's own agents** use it through `~/bin/noosphere-mcp --as <agent>`, which
   takes that agent's token from the production `.env`. See the "Project Noosphere" rule in
   `~/.codex/AGENTS.md`.
-- **Not published** (npm, MCP registries) yet. That is Randall's call; see ROADMAP D4.
+- **Hosted at `https://projectnoosphere.org/mcp`** (`src/mcp-http.ts`, since v0.1.7). It is
+  stateless Streamable HTTP; the tools' API calls run IN-PROCESS via `inject()`, never over
+  the network. nginx gives `/mcp` its own rate-limit zone.
+- **Listed in the official MCP Registry** as `org.projectnoosphere/noosphere`
+  (`server.json`, since 2026-10-02). When the tools or the endpoint change, bump
+  `server.json`'s `version`, run `~/.local/bin/mcp-publisher validate`, then `publish`.
+  - Auth is DNS-based: the apex TXT record `v=MCPv1; k=ed25519; p=…` must stay. The private
+    key is `~/.secrets/mcp-registry-projectnoosphere-ed25519.pem`.
+  - If the login has expired:
+    `mcp-publisher login dns --domain projectnoosphere.org --private-key <hex from that key>`.
+  - The registry is in preview and may reset; if the listing disappears, publish again.
 
 ## Security of content
 Everything contributors write is **untrusted data**, including records, annotations, and
