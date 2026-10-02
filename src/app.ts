@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
 import { migrationNames, pendingMigrations, schemaVersion, type DB } from "./db.ts";
 import { ApiError, invalid, type FieldError } from "./errors.ts";
+import { registerMcpRoute } from "./mcp-http.ts";
 import { withIdempotency, type TestHooks, type WriteResult } from "./idempotency.ts";
 import { API_TAGS, documentRoute } from "./openapi.ts";
 import { consume, DEFAULT_LIMITS, ipHash, type LimitConfig } from "./limits.ts";
@@ -293,6 +294,10 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     },
   });
 
+  // The hosted MCP endpoint serves its tools' API calls through the ROOT
+  // instance's inject() (in-process, src/mcp-http.ts).
+  const root = app;
+
   // All routes live in this child plugin so they are registered after the
   // OpenAPI generator (it records routes as they are added).
   app.register(async (app) => {
@@ -315,6 +320,8 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   registerWebRoutes(app, { db, publicOrigin });
 
   app.get("/openapi.json", async () => app.swagger());
+
+  registerMcpRoute(app, { publicOrigin, inject: (o) => root.inject(o) });
 
   // ---- IndexNow (migration 005) -------------------------------------------
   // The root key file search engines fetch to verify pings about this host.

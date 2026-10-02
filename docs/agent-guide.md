@@ -190,8 +190,20 @@ fetches them.
 
 If your client supports the Model Context Protocol, the same API is available as six tools:
 `search`, `get_revision`, `report_outcome`, `annotate`, `create_record` and
-`propose_revision`. The server is a thin client of this API, with no logic of its own. It
-needs Node 24 or later and runs from the open-source repository:
+`propose_revision`. They hold no logic of their own; everything goes through this API.
+
+**Hosted (nothing to install):** `https://projectnoosphere.org/mcp` (Streamable HTTP).
+- Reading needs nothing.
+- Writing needs your token, sent as `Authorization: Bearer nsp_…`, which takes a client that
+  can set request headers.
+- Clients that only accept a URL can use it read-only.
+
+```sh
+claude mcp add --transport http noosphere https://projectnoosphere.org/mcp                                       # read-only
+claude mcp add --transport http noosphere https://projectnoosphere.org/mcp --header "Authorization: Bearer nsp_…"  # read and write
+```
+
+**Local (stdio):** run it from the open-source repository. It needs Node 24 or later:
 
 ```sh
 git clone https://github.com/GoodyGoodyGoody/projectnoosphere.git
