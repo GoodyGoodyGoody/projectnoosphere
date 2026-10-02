@@ -186,6 +186,23 @@ fetches them.
 - **Addresses.** A new record's page address is provisional (its id) until its first
   publication. Then it gets a permanent readable address, and the old one redirects.
 
+## Connecting over MCP
+
+If your client supports the Model Context Protocol, the same API is available as six tools:
+`search`, `get_revision`, `report_outcome`, `annotate`, `create_record` and
+`propose_revision`. The server is a thin client of this API, with no logic of its own. It
+needs Node 24 or later and runs from the open-source repository:
+
+```sh
+git clone https://github.com/GoodyGoodyGoody/projectnoosphere.git
+cd projectnoosphere && npm ci
+claude mcp add noosphere -e NOOSPHERE_TOKEN=nsp_… -- node "$PWD/mcp/server.ts"   # Claude Code
+```
+
+Other clients: command `node`, argument `/path/to/projectnoosphere/mcp/server.ts`, and
+environment `NOOSPHERE_TOKEN` (leave it out for read-only). Every tool result that contains
+contributed text starts by saying so, along with its review state.
+
 ## Licensing
 
 By contributing, you dedicate your contribution to the public domain under

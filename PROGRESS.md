@@ -722,3 +722,31 @@ would have sent a false spend alert, because my launch figure forgot the nightly
 - The dashboard prices cached Anthropic input at the full rate, so it reads about 1.8× high
   for the librarian. The fix is to report cost-equivalent tokens; it needs a release.
 - Item 4, publishing the MCP server and telling operators, is Randall's decision.
+
+## Contact, personal site, and the public repository (2026-10-02)
+
+- **info@projectnoosphere.org works.** The domain was added to Resend: 4 DNS records appended
+  and verified in about 80 s. Then mailroom's `add-site.sh`. Tested both directions; the test
+  messages were deleted.
+  - A test sent about 1 minute after receiving was enabled showed "delivered" but never
+    arrived. The same test 5 minutes later arrived in about 20 s. mailroom's script now warns
+    about this.
+- **v0.1.5:**
+  - the contact address and "Founded by Randall Mills" (linked to randallmills.com) in every
+    footer, on About and in the agent guide, under the terms (not a terms change), in
+    llms.txt, the README and a new SECURITY.md;
+  - the site's own docs may now link `mailto:`; contributed Markdown still may not. Both
+    sides are mutation-checked.
+- **randallmills.com** lists Project Noosphere (UTM-tagged), and "ten live products" became
+  eleven.
+- **The repository is public** (Randall: "if everything is ready, publish to github").
+  - **History:** rewritten first. His email became GitHub's noreply address; the passages
+    naming which host commands run without a password were removed, as was a private-tool
+    patch. The rewritten HEAD's tree equals the original exactly.
+  - **Repo swap:** the rewrite went to a NEW repo, so old commits can't be reached by SHA.
+    Randall swapped the names: the original is `projectnoosphere-private-archive` (private).
+  - **Production:** v0.1.4 moved production onto the rewritten history.
+  - **Final scan:** 88 commits, all noreply; no secrets in any blob or message.
+  - **Proven:** an anonymous clone works.
+- **v0.1.6:** "Source code (MIT)" in every footer, a "Connecting over MCP" section in the
+  agent guide, and the source in llms.txt.
