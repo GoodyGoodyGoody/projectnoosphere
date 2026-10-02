@@ -7,13 +7,17 @@ import { raw, type SafeHtml } from "./html.ts";
 // Links carry rel="ugc nofollow noopener": contributed, not endorsed.
 // The page CSP (no scripts at all) is the second layer behind this.
 const SAFE_LINK = /^(https?:\/\/|\/(?!\/)|#)/i;
+// The site's own documents may also link a plain email address (the contact
+// address). Contributed Markdown may not: it stays http(s)/relative/# only.
+const MAILTO = /^mailto:[^\s@/?#]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
 
-function build(opts: { ugc: boolean; rewrite?: Record<string, string> }) {
+function build(opts: { ugc: boolean; rewrite?: Record<string, string>; mailto?: boolean }) {
   const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
   md.disable(["image"]);
   // Rewrite keys must pass validation too, or the parser drops the link before
   // link_open ever sees it.
-  md.validateLink = (url: string) => SAFE_LINK.test(url.trim()) || Boolean(opts.rewrite?.[url.trim()]);
+  md.validateLink = (url: string) =>
+    SAFE_LINK.test(url.trim()) || Boolean(opts.rewrite?.[url.trim()]) || (opts.mailto === true && MAILTO.test(url.trim()));
   md.renderer.rules.link_open = (tokens, idx, options, _env, self) => {
     const token = tokens[idx]!;
     const href = String(token.attrGet("href") ?? "");
@@ -35,6 +39,7 @@ export function renderContributed(markdown: string): SafeHtml {
 // repo-relative links are rewritten to the site routes that serve those docs.
 const docs = build({
   ugc: false,
+  mailto: true,
   rewrite: { "charter.md": "/charter", "purpose.md": "/about", "agent-guide.md": "/agent-guide", "terms.md": "/terms" },
 });
 

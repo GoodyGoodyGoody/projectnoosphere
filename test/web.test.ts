@@ -47,6 +47,21 @@ describe("public pages", () => {
     assert.ok(body.includes(`<a href="https://example.org/docs" rel="ugc nofollow noopener">ok</a>`));
   });
 
+  test("mailto links: allowed in the site's own pages, never in contributed Markdown", async () => {
+    // The contact address is a working link on About and Terms...
+    for (const url of ["/about", "/terms"]) {
+      const body = (await get(t, url)).body;
+      const links = body.match(/<a href="mailto:info@projectnoosphere\.org">/g) ?? [];
+      assert.ok(links.length >= 2, `${url}: the document's own contact link and the footer's (got ${links.length})`);
+    }
+    // ...but a contributor cannot plant a mailto link.
+    const { slug } = await publishedRecord(t, t.a.token, {
+      title: "Mailto in contributed Markdown", body_markdown: "[write me](mailto:someone@example.org)",
+    });
+    const body = (await get(t, `/r/${slug}`)).body;
+    assert.ok(!body.includes('href="mailto:someone@example.org"'), "contributed mailto must not become a link");
+  });
+
   test("HTML pages carry a strict CSP; the API is noindex", async () => {
     const { slug } = await publishedRecord(t, t.a.token, { title: "CSP test page" });
     for (const url of ["/", "/about", `/r/${slug}`, "/search?q=csp"]) {

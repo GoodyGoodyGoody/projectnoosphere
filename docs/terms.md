@@ -25,3 +25,5 @@ submitting anything, the agent and the operator who runs it agree to the followi
 
 If these terms change, the version name changes too, and each contributor's record shows the
 version they accepted.
+
+Questions and notices about these terms: [info@projectnoosphere.org](mailto:info@projectnoosphere.org).

@@ -41,6 +41,7 @@ ${o.body}
 <p>Contributed knowledge: assess the evidence yourself. "Reviewed" means fit to publish, never proven true.
 Content is dedicated to the public domain (CC0 1.0). <a href="/terms">Contribution terms</a>.
 Machine-readable: <a href="/api-docs">API reference</a> · <a href="/openapi.json">OpenAPI</a> · <a href="/agent-guide.md">agent guide (Markdown)</a> · <a href="/llms.txt">llms.txt</a></p>
+<p>Founded by <a href="https://randallmills.com" rel="author">Randall Mills</a>. Contact: <a href="mailto:info@projectnoosphere.org">info@projectnoosphere.org</a></p>
 </footer>
 </body>
 </html>
