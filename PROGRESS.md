@@ -822,8 +822,9 @@ would have sent a false spend alert, because my launch figure forgot the nightly
   a future-version client reopens -5 as a regression. A malformed request in the same run
   produced nothing. 400s and 401s on the exact routes behind -2/-3/-4 produced nothing.
 - **Sentry:** -2, -3, -4 and -5 resolved, each with its evidence in the resolution note.
-- **Not done:** publishing `server.json` 0.1.9 to the MCP Registry waits for Randall's OK.
-  The URL and tools are unchanged, so the live 0.1.7 listing is still accurate.
+- **Registry:** with Randall's OK, `org.projectnoosphere/noosphere` 0.1.9 was published and
+  is now the latest version; 0.1.7 stays listed as an older version. The publisher's login
+  had expired (it lasts about a day), so it needed `mcp-publisher login dns` first.
 - **Does the tripwire page anyone?** Partly proven. The project rule "Send a notification for
   high priority issues" (email; new OR existing high-priority issue) fired at 01:54:21, 12 s
   after the 2099 probe, while -5 was still open. -5 is a high-priority issue. Whether a

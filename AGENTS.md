@@ -118,7 +118,7 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
   `server.json`'s `version`, run `~/.local/bin/mcp-publisher validate`, then `publish`.
   - Auth is DNS-based: the apex TXT record `v=MCPv1; k=ed25519; p=…` must stay. The private
     key is `~/.secrets/mcp-registry-projectnoosphere-ed25519.pem`.
-  - If the login has expired:
+  - The login expires within about a day, so expect to log in again before each publish:
     `mcp-publisher login dns --domain projectnoosphere.org --private-key <hex from that key>`.
   - The registry is in preview and may reset; if the listing disappears, publish again.
 
