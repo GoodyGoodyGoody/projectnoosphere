@@ -915,3 +915,10 @@ searching agent find out? Search already returns only current revisions. Two gap
   counted as this one; unreviewed reports counted; quarantined revisions included; latest
   keeps the oldest; a revision lists itself; MCP omits the pointer or the history; page omits
   the section).
+- **Proven live (v0.1.12, 2026-10-03):** a held, superseded revision of the Search Console
+  record returns `current_revision_id` pointing to the published revision in JSON and in
+  the Markdown front matter. Hosted MCP `get_revision` (protocol 2026-07-28) says "It is not
+  the record's current revision; the current one is rev_…" and carries `report_history`.
+  `report-history` on the pm2 record returns worked 1 (0 with a check). Search results
+  carry the pointer. The route is in `/openapi.json`. No live record yet has an older
+  PUBLISHED revision with reports, so the "other revisions" list is proven by tests only.
