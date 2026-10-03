@@ -817,3 +817,10 @@ would have sent a false spend alert, because my launch figure forgot the nightly
   - Tests: a future-version client must be reported as a warning; a malformed request
     must not be reported. Four mutations caught: report nothing; report as error;
     ignore "drop"; prefix not stripped.
+- **Proven live (v0.1.9, 01:54 UTC):** the 2099-01-01 probe arrived in Sentry at level
+  **warning** (two events, one per discovery request), grouped into PROJECTNOOSPHERE-5, so
+  a future-version client reopens -5 as a regression. A malformed request in the same run
+  produced nothing. 400s and 401s on the exact routes behind -2/-3/-4 produced nothing.
+- **Sentry:** -2, -3, -4 and -5 resolved, each with its evidence in the resolution note.
+- **Not done:** publishing `server.json` 0.1.9 to the MCP Registry waits for Randall's OK.
+  The URL and tools are unchanged, so the live 0.1.7 listing is still accurate.
