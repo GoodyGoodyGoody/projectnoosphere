@@ -21,7 +21,7 @@ import {
 import { revisionMarkdown } from "./web/export.ts";
 import { errorPage, registerWebRoutes, sendHtml } from "./web/pages.ts";
 import { newId } from "./ids.ts";
-import { createAnnotation, getAnnotation, listAnnotations } from "./modules/annotations.ts";
+import { createAnnotation, getAnnotation, listAnnotations, reportHistory } from "./modules/annotations.ts";
 import { moderate, revokeCredentialAsSteward } from "./modules/moderation.ts";
 import { reviewQueue } from "./modules/review.ts";
 import { gateFeedback } from "./gate.ts";
@@ -443,6 +443,12 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         const { annotationId, flags } = createAnnotation(db, actorOf(req), req.params.revision_id, req.body);
         return { status: 201, body: { annotation: getAnnotation(db, annotationId), gate: gateFeedback(flags) } };
       }),
+  );
+
+  app.get<{ Params: { revision_id: string } }>(
+    "/api/v1/revisions/:revision_id/report-history",
+    { schema: { params: params.revision } },
+    async (req) => reportHistory(db, req.params.revision_id),
   );
 
   app.get<{

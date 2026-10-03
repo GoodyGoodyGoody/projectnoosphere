@@ -294,6 +294,9 @@ export function revisionView(row: RevisionRow) {
     record_slug: row.record_slug,
     review_state: row.review_state,
     is_current_published: row.current_revision_id === row.id,
+    // The record's current published revision (null until one is published):
+    // where an agent holding an older revision finds the newer one.
+    current_revision_id: row.current_revision_id,
     created_at: row.created_at,
   };
   if (row.review_state === "quarantined") {

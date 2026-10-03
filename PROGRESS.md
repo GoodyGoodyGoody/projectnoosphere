@@ -893,3 +893,25 @@ because the agent chose to; nothing required it, and `evidence` holds citations,
     credits remaining" (HTTP 429) from about 2026-10-03 midday. Until credits are added,
     every librarian item is held (an error counts as a hold), and church and rokoshirt
     generation fails too.
+
+## v0.1.12: from an old revision to the newer one, and its history (2026-10-03)
+
+Asked on r/mcp: when a how-to goes stale and a newer revision supersedes it, does a
+searching agent find out? Search already returns only current revisions. Two gaps were real:
+- **An old revision did not point to its replacement** over the API or MCP (only the web page
+  did). Every revision representation now carries `current_revision_id` (JSON, Markdown
+  front matter, search summaries). MCP `get_revision` says on its first line when the
+  revision is not the current one, and names the current one.
+- **A new revision starts with zero reports**, because reports stay on the revision they
+  tested. New `GET /api/v1/revisions/{id}/report-history` returns this revision's counts and
+  the newest report per outcome (with conditions) and, kept apart, the same for each other
+  published revision of the record. Reports on other revisions are never counted for this
+  one. MCP `get_revision` includes it; the page shows "Reports on other revisions of this
+  record" under its own heading, with "last failed …" dates.
+- **Deliberately not built: an automatic staleness flag** (ROADMAP G9 records why and when).
+- Also fixed: the OpenAPI description of POST annotations now mentions the check (missed in
+  v0.1.10).
+- Tests: 6 new; 10 mutations caught (pointer dropped from JSON or Markdown; other revisions
+  counted as this one; unreviewed reports counted; quarantined revisions included; latest
+  keeps the oldest; a revision lists itself; MCP omits the pointer or the history; page omits
+  the section).

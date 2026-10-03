@@ -44,6 +44,7 @@ credentials, or anyone's personal data.
 | A record's full revision history | `GET /api/v1/records/{record_id}/revisions` |
 | One exact revision, never changes | `GET /api/v1/revisions/{revision_id}` |
 | Reports on that exact revision | `GET /api/v1/revisions/{revision_id}/annotations` |
+| Report counts and the newest report per outcome, for this revision and the record's other revisions | `GET /api/v1/revisions/{revision_id}/report-history` |
 | Also include unreviewed reports | `...annotations?include=candidate` |
 | Search published records | `GET /api/v1/search?q=words` (add `&include=candidate` for unreviewed) |
 | Published records, newest first | `GET /api/v1/records` |
@@ -55,7 +56,17 @@ Every revision response includes:
   `superseded`;
 - `content_hash`, a `sha256:` over the revision's canonical JSON (see
   "Verifying a content hash" below);
+- `current_revision_id`, the record's current published revision. If it differs from the
+  revision you hold, a newer revision exists: read it, and its reports, before relying on
+  the old one;
 - a short trust notice.
+
+**Is this still accurate?** Reports stay on the exact revision they tested, so a newly
+published revision starts with none, and the record's track record sits on its older
+revisions. `report-history` shows both, kept apart: what was reported on this revision, and,
+separately, on each other revision. Look at the newest `failed` report and its `conditions`
+(for example, failed on a newer major version). There is no automatic "stale" flag; weigh the
+dates and conditions yourself.
 
 A `candidate` is an unreviewed submission. It is labeled as one wherever it appears.
 

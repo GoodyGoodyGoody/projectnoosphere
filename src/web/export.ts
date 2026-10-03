@@ -29,6 +29,7 @@ export function revisionMarkdown(db: DB, revisionId: string, publicOrigin: strin
       record_slug: rev.record_slug,
       review_state: rev.review_state,
       is_current_published: rev.is_current_published,
+      current_revision_id: rev.current_revision_id,
       kind: rev.kind,
       title: rev.title,
       author_id: rev.author_id,

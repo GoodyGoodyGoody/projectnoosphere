@@ -246,3 +246,94 @@ export function listAnnotations(
     next_cursor: more ? (items.at(-1)?.id ?? null) : null,
   };
 }
+
+// ---- report history across a record's revisions ---------------------------
+// A report stays on the exact revision it tested, so a new revision starts with
+// no reports and the record's track record lives on older revisions. This
+// summarizes reports per revision so that history stays visible, and keeps
+// "this revision" and "other revisions" strictly apart: reports on another
+// revision tested different content and are never counted for this one.
+// Reviewed reports only; other revisions only if they were published
+// (reviewed), so candidates, rejected and quarantined revisions never appear.
+
+export const OTHER_REVISIONS_NOTICE =
+  "Reports on other revisions of this record tested different content. They are context, not reports about this revision.";
+const HISTORY_MAX_REVISIONS = 20;
+
+interface HistoryRow {
+  revision_id: string;
+  report_id: string;
+  outcome: string;
+  checked: number;
+  conditions: string;
+  created_at: string;
+}
+
+function summarizeReports(rows: HistoryRow[]) {
+  const outcomes: Record<string, number> = {};
+  const outcomesWithCheck: Record<string, number> = {};
+  // The newest reviewed report of each outcome: "last failed 2026-10-02 on
+  // node 26" is often the staleness signal itself.
+  const latest: Record<string, { report_id: string; at: string; conditions: Record<string, unknown> }> = {};
+  for (const r of rows) {
+    outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
+    if (r.checked) outcomesWithCheck[r.outcome] = (outcomesWithCheck[r.outcome] ?? 0) + 1;
+    const prev = latest[r.outcome];
+    if (!prev || r.created_at > prev.at || (r.created_at === prev.at && r.report_id > prev.report_id)) {
+      latest[r.outcome] = { report_id: r.report_id, at: r.created_at, conditions: JSON.parse(r.conditions) };
+    }
+  }
+  return { outcomes, outcomes_with_check: outcomesWithCheck, latest };
+}
+
+export function reportHistory(db: DB, revisionId: string) {
+  const target = db
+    .prepare(
+      `SELECT v.record_id, r.current_revision_id, rr.state FROM revisions v
+         JOIN records r ON r.id = v.record_id
+         JOIN revision_review rr ON rr.revision_id = v.id
+        WHERE v.id = ?`,
+    )
+    .get(revisionId) as { record_id: string; current_revision_id: string | null; state: string } | undefined;
+  if (!target || target.state === "quarantined") throw notFound("revision");
+
+  const reportsOf = (where: string, ...args: unknown[]) =>
+    db
+      .prepare(
+        `SELECT a.revision_id, a.id AS report_id, a.outcome, a.check_json IS NOT NULL AS checked,
+                a.conditions, a.created_at
+           FROM annotations a
+           JOIN annotation_review ar ON ar.annotation_id = a.id AND ar.state = 'reviewed'
+          WHERE a.kind = 'outcome_report' AND ${where}`,
+      )
+      .all(...args) as HistoryRow[];
+
+  const own = reportsOf("a.revision_id = ?", revisionId);
+  const others = reportsOf(
+    `a.revision_id IN (SELECT v.id FROM revisions v
+                         JOIN revision_review rr ON rr.revision_id = v.id AND rr.state = 'reviewed'
+                        WHERE v.record_id = ? AND v.id <> ?)`,
+    target.record_id, revisionId,
+  );
+  const byRevision = new Map<string, HistoryRow[]>();
+  for (const r of others) byRevision.set(r.revision_id, [...(byRevision.get(r.revision_id) ?? []), r]);
+  const created = db.prepare("SELECT created_at FROM revisions WHERE id = ?").pluck();
+  // Newest revision first (ids are time-ordered).
+  const otherRevisions = [...byRevision.keys()]
+    .sort((a, b) => (a < b ? 1 : -1))
+    .slice(0, HISTORY_MAX_REVISIONS)
+    .map((id) => ({
+      revision_id: id,
+      is_current_published: id === target.current_revision_id,
+      revision_created_at: created.get(id) as string,
+      ...summarizeReports(byRevision.get(id)!),
+    }));
+  return {
+    revision_id: revisionId,
+    record_id: target.record_id,
+    current_revision_id: target.current_revision_id,
+    this_revision: summarizeReports(own),
+    other_revisions: otherRevisions,
+    notice: OTHER_REVISIONS_NOTICE,
+  };
+}

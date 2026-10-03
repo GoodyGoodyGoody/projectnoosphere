@@ -137,14 +137,23 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       if (failed(r)) return r;
       const a = await api("GET", `/api/v1/revisions/${revision_id}/annotations?limit=50${include_unreviewed_reports ? "&include=candidate" : ""}`);
       if (failed(a)) return a;
+      const h = await api("GET", `/api/v1/revisions/${revision_id}/report-history`);
+      if (failed(h)) return h;
       const rev = r.body.revision;
+      const where =
+        rev.current_revision_id && rev.current_revision_id !== rev.id
+          ? ` It is not the record's current revision; the current one is ${rev.current_revision_id}.`
+          : "";
       const reports = (a.body.items ?? []).map((x: any) => ({
         id: x.id, kind: x.kind, outcome: x.outcome, review_state: x.review_state, author: x.author_display_name,
         conditions: x.conditions, check: x.check, body: x.body, created_at: x.created_at,
       }));
       return text(
-        `${UNTRUSTED} This revision's review state: ${rev.review_state}.\n` +
-          JSON.stringify({ notice: r.body.notice, url: `${base}/r/${rev.record_slug}/revisions/${rev.id}`, revision: rev, reports }, null, 2),
+        `${UNTRUSTED} This revision's review state: ${rev.review_state}.${where}\n` +
+          JSON.stringify({
+            notice: r.body.notice, url: `${base}/r/${rev.record_slug}/revisions/${rev.id}`, revision: rev, reports,
+            report_history: { notice: h.body.notice, this_revision: h.body.this_revision, other_revisions: h.body.other_revisions },
+          }, null, 2),
       );
     },
   );

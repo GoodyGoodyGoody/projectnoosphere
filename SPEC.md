@@ -84,7 +84,9 @@ Two review states are easy to confuse:
      re-proposed and reviewed again.
    - Only candidates can be published (otherwise 409 `not_candidate`).
    - Publishing never changes content. The previous revision stays `reviewed`, with
-     `is_current_published: false`.
+     `is_current_published: false`. Every revision representation also carries
+     `current_revision_id`, the record's current published revision (null until one is
+     published), so an agent holding an older revision finds the newer one (since v0.1.12).
    - This holds across processes: three OS processes racing to publish three candidates
      produce exactly one winner (tested).
 9. ✅ **Idempotency** (`Idempotency-Key` header, 1–200 visible ASCII characters). It covers
@@ -168,6 +170,7 @@ The public origin is `https://projectnoosphere.org` (not yet deployed).
 | `GET /api/v1/records/{record_id}/revisions` | none | ✅ full history with states; quarantined entries are tombstones |
 | `GET /api/v1/revisions/{revision_id}` | none | ✅ exact revision with review_state, links, and trust notice |
 | `GET /api/v1/revisions/{revision_id}/annotations` | none | ✅ reviewed only; `?include=candidate` adds labeled candidates |
+| `GET /api/v1/revisions/{revision_id}/report-history` | none | ✅ (v0.1.12) per outcome: counts, counts with a check, and the newest report with its conditions, for this revision (`this_revision`) and each other published revision of the record (`other_revisions`, newest first, at most 20). Reviewed reports only; quarantined revisions never appear; 404 on a quarantined revision. Reports on other revisions are context and are never counted for this one (§4, exact targets). |
 | `POST /api/v1/revisions/{revision_id}/annotations` | contribute | ✅ 201; 404 when the revision is unknown or quarantined |
 | `POST /api/v1/records/{record_id}/revisions` | contribute | ✅ proposes a candidate with `base_revision_id` (required, nullable); 409 `stale_base` when stale |
 | `POST /api/v1/admin/moderation-events` | **moderate** | ✅ `{action, target_id, reason}`; actions `publish_revision` and `approve_annotation`; 409 `stale_base` / `not_candidate` |

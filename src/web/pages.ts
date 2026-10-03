@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DB } from "../db.ts";
 import { ApiError } from "../errors.ts";
-import { listAnnotations, reportCounts } from "../modules/annotations.ts";
+import { listAnnotations, OTHER_REVISIONS_NOTICE, reportCounts, reportHistory } from "../modules/annotations.ts";
 import { search } from "../modules/search.ts";
 import { searchPageQuerySchema } from "../schemas.ts";
 import {
@@ -113,7 +113,21 @@ Content hash <code>${rev.content_hash}</code> · License ${rev.content_license}<
 </article>`;
 }
 
-function reportsSection(db: DB, revisionId: string): SafeHtml {
+// Reports on the record's OTHER published revisions: context, kept apart from
+// this revision's own reports and never counted with them.
+function otherRevisionsReports(db: DB, revisionId: string, slug: string): SafeHtml {
+  const { other_revisions: others } = reportHistory(db, revisionId);
+  if (!others.length) return html``;
+  const last = (o: (typeof others)[number]) =>
+    (["failed", "worked", "partially_worked"] as const)
+      .filter((k) => o.latest[k])
+      .map((k) => html` · last ${k.replace("_", " ")} ${when(o.latest[k]!.at)}`);
+  return html`<h3>Reports on other revisions of this record</h3>
+<p class="small">${OTHER_REVISIONS_NOTICE}</p>
+<ul class="plain">${others.map((o) => html`<li><a href="${o.is_current_published ? `/r/${slug}` : `/r/${slug}/revisions/${o.revision_id}`}">${o.revision_id}</a>${o.is_current_published ? " (current)" : ""}: ${Object.entries(o.outcomes).map(([k, n], i) => html`${i ? ", " : ""}${k.replace("_", " ")} ${n}`)}${last(o)}</li>`)}</ul>`;
+}
+
+function reportsSection(db: DB, revisionId: string, slug: string): SafeHtml {
   const counts = reportCounts(db, revisionId);
   const reports = listAnnotations(db, revisionId, { limit: 50, includeCandidate: false });
   const tally = Object.entries(counts.outcomes).map(([o, n], i) => {
@@ -131,7 +145,8 @@ ${a.check
     : a.kind === "outcome_report" ? html`<p class="small">No check attached.</p>` : ""}
 ${conditionsList(a.conditions)}
 </div>`)}
-${counts.candidate ? html`<p class="small">${counts.candidate} unreviewed report${counts.candidate === 1 ? "" : "s"} awaiting review — <a href="${revisionUrl(revisionId)}/annotations?include=candidate">inspect via the API</a>.</p>` : ""}`;
+${counts.candidate ? html`<p class="small">${counts.candidate} unreviewed report${counts.candidate === 1 ? "" : "s"} awaiting review — <a href="${revisionUrl(revisionId)}/annotations?include=candidate">inspect via the API</a>.</p>` : ""}
+${otherRevisionsReports(db, revisionId, slug)}`;
 }
 
 function machineLinks(recordId: string, revisionId: string): SafeHtml {
@@ -406,7 +421,7 @@ ${res.next_offset !== null ? html`<p><a href="/search?q=${encodeURIComponent(q)}
     const history = listRevisions(db, recordId, { limit: 50 });
     const body = html`${published ? "" : html`<div class="notice candidate"><strong>Not yet published.</strong> This record has no reviewed revision; you are seeing its latest candidate.</div>`}
 ${revisionArticle(rev)}
-${reportsSection(db, rev.id)}
+${reportsSection(db, rev.id, rev.record_slug)}
 <h2>History</h2>
 <ul class="plain">${history.items.map((h) => html`<li>${badge(h.review_state)} <a href="/r/${rec.record.slug}/revisions/${h.id}">${"withheld" in h ? "withheld" : h.title}</a> <span class="small">${when(h.created_at)}${h.is_current_published ? " · current" : ""}</span></li>`)}</ul>
 ${machineLinks(recordId, rev.id)}`;
@@ -455,7 +470,7 @@ ${machineLinks(recordId, rev.id)}`;
       ],
       body: html`<div class="notice">You are viewing an exact revision. ${where}</div>
 ${revisionArticle(rev)}
-${reportsSection(db, rev.id)}
+${reportsSection(db, rev.id, rev.record_slug)}
 ${machineLinks(rev.record_id, rev.id)}`,
     }), { noindex: true });
   });

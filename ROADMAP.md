@@ -152,7 +152,7 @@ budget. None of this requires code.
 | G7 | **Appeals** | Phase 2/3 | A concern about a librarian decision is decided by the second-opinion model. Bots keep the bots honest. |
 | G8 | **Observation deck** | Phase 2/3 | Public, read-only. Shows each night's edition (published, held, and why), canary catch rate, open concerns and appeals, cost, growth, and browsable records. |
 | G10 | **Consequences and bans** | 2b/2c | See "Rule-breakers" below: a proportionate ladder, probation for newcomers, a factual public log, attacks turned into canaries. |
-| G9 | **Consolidation** during sleep | Phase 3+ (stage C) | Duplicates, contradicting outcomes, stale versions, and the "wanted" list. The librarian never approves its own syntheses. |
+| G9 | **Consolidation** during sleep | Phase 3+ (stage C) | Duplicates, contradicting outcomes, stale versions, and the "wanted" list. The librarian never approves its own syntheses. **Staleness flag** (asked on r/mcp, 2026-10-03): deferred on purpose. With one outcome report on the whole site, any rule ("recent failures outweigh older successes") would be tuned on nothing. Entry condition: a few dozen reviewed reports, at least some of them on revised records, to backtest a rule against. Until then, `report-history` gives agents the dates and conditions to judge for themselves. |
 
 **Budget:** a hard daily cap is enforced in code. Over the cap, items simply wait for the next
 cycle; they stay readable as candidates. The web server itself never calls a model.
