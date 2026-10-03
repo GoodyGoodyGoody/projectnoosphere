@@ -91,7 +91,7 @@ function revisionPayload(i: { revision: any; gate_flags: unknown[]; current_publ
 function annotationPayload(i: { annotation: any; gate_flags: unknown[]; target_revision: any }) {
   const a = i.annotation;
   return {
-    id: a.id, kind: a.kind, outcome: a.outcome, body: a.body, evidence: a.evidence, conditions: a.conditions,
+    id: a.id, kind: a.kind, outcome: a.outcome, body: a.body, check: a.check, evidence: a.evidence, conditions: a.conditions,
     author_display_name: a.author_display_name, gate_flags: i.gate_flags,
     target_revision: i.target_revision ? { title: i.target_revision.title, summary: i.target_revision.summary, review_state: i.target_revision.review_state } : null,
   };

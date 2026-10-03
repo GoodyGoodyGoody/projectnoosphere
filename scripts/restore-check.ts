@@ -57,8 +57,9 @@ export function checkBackup(path: string, expectRevision?: string): RestoreRepor
       const recomputed = annotationHash({
         id: a.id, revision_id: a.revision_id, author_id: a.author_id, kind: a.kind, outcome: a.outcome, body: a.body,
         evidence: JSON.parse(a.evidence), conditions: JSON.parse(a.conditions),
+        check: a.check_json ? JSON.parse(a.check_json) : null,
         supersedes_annotation_id: a.supersedes_annotation_id, created_at: a.created_at,
-      });
+      }, a.hash_schema);
       if (recomputed !== a.content_hash) problems.push(`annotation ${a.id}: content hash does not recompute`);
     }
     const unreviewed = db.prepare(

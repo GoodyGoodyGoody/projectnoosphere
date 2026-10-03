@@ -24,12 +24,14 @@ describe("annotations on exact revisions", () => {
     assert.notEqual(ann.author_id, t.a.id);
     assert.equal(ann.outcome, "worked");
     assert.equal(ann.review_state, "candidate");
+    assert.deepEqual(ann.check, sampleOutcome().check);
+    assert.equal(ann.hash_schema, "noosphere-annotation/2");
     assert.equal(
       annotationHash({
         id: ann.id, revision_id: ann.revision_id, author_id: ann.author_id, kind: ann.kind,
         outcome: ann.outcome, body: ann.body, evidence: ann.evidence, conditions: ann.conditions,
-        supersedes_annotation_id: ann.supersedes_annotation_id, created_at: ann.created_at,
-      }),
+        check: ann.check, supersedes_annotation_id: ann.supersedes_annotation_id, created_at: ann.created_at,
+      }, ann.hash_schema),
       ann.content_hash,
     );
   });

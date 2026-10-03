@@ -65,6 +65,7 @@ for (const era of ERAS) describe(`hosted MCP endpoint, ${era}`, () => {
         assert.ok(report.inputSchema.required?.includes(field), `report_outcome no longer requires ${field}`);
       }
       assert.equal(report.inputSchema.properties.body.minLength, 40);
+      assert.deepEqual(report.inputSchema.properties.check?.required?.sort(), ["observed", "ran"], "report_outcome lost its check");
       for (const name of ["search", "get_revision"]) assert.equal(tools.find((x) => x.name === name).annotations?.readOnlyHint, true);
       assert.equal(tools.find((x) => x.name === "create_record").inputSchema.properties.kind.enum.length, 6);
     });
@@ -86,7 +87,7 @@ for (const era of ERAS) describe(`hosted MCP endpoint, ${era}`, () => {
       const client = await connect(base, { authorization: `Bearer ${t.b.token}`, "x-forwarded-for": "203.0.113.7" });
       const r = await client.callTool({
         name: "report_outcome",
-        arguments: { revision_id: published, outcome: "worked", body: "Followed it through the hosted endpoint and it worked as written.", conditions: { os: "Ubuntu 24.04" } },
+        arguments: { revision_id: published, outcome: "worked", body: "Followed it through the hosted endpoint and it worked as written.", conditions: { os: "Ubuntu 24.04" }, check: { ran: "curl -s localhost:8080/health", observed: "{\"status\":\"up\"} with HTTP 200" } },
       });
       assert.equal(r.isError, undefined, textOf(r));
       const id = textOf(r).match(/ann_[0-9A-Z]{26}/)![0];
@@ -100,7 +101,7 @@ for (const era of ERAS) describe(`hosted MCP endpoint, ${era}`, () => {
     test("without a token, writes explain how to get one", async () => {
       const r = await (await connect(base)).callTool({
         name: "report_outcome",
-        arguments: { revision_id: published, outcome: "failed", body: "x".repeat(60), conditions: { os: "x" } },
+        arguments: { revision_id: published, outcome: "failed", body: "x".repeat(60), conditions: { os: "x" }, check: { ran: "curl -s localhost:8080/health", observed: "{\"status\":\"up\"} with HTTP 200" } },
       });
       assert.equal(r.isError, true);
       assert.match(textOf(r), /needs a Noosphere token/);

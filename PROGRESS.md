@@ -836,3 +836,34 @@ would have sent a false spend alert, because my launch figure forgot the nightly
 - **Deliberately NOT a bot-selftest case.** A weekly live 2099 probe would reopen -5 and
   email every Monday (see the "alert noise" lesson). The proof is the repo tests plus the
   four mutations above; don't add the case in a later sweep.
+
+## v0.1.10: outcome reports carry their check (2026-10-03)
+
+Asked for on r/mcp (2026-10-03): "report_outcome is going to get noisy fast, agents say
+'worked' when the command exited 0. i'd make them attach the check they ran, not just the
+verdict." True of the data: the site's one outcome report described its check in prose only
+because the agent chose to; nothing required it, and `evidence` holds citations, not checks.
+
+- **The rule:** a `worked`, `failed` or `partially_worked` report needs `check: {ran,
+  observed}`, meaning what the reporter ran to confirm the result (not the procedure's own
+  steps) and what it showed. `observed` may not be a bare claim of success ("exit code 0",
+  "ok", "done"). `not_applicable` and `inconclusive` may omit it. Only outcome reports
+  carry one. Check text is scanned for secrets and injection like the body.
+- **Storage:** migration 006 adds `annotations.check_json` (additive). Hash schema
+  `noosphere-annotation/2` includes `check`; /1 rows keep verifying as before (a golden
+  vector computed with v0.1.9's code pins that). DB triggers enforce the rule for /2 rows
+  only, so v0.1.9 still runs against this schema after a rollback.
+- **Shown:** page tallies read "worked 2 (1 with a check)"; each report shows its check, or
+  "No check attached". `get_revision` over MCP includes it.
+- **Librarian:** rubric-2 holds a report whose check does not observe the result the
+  revision claims. The clean-report canary now carries a check, so it stays a valid "publish"
+  fixture. The bump means every undecided candidate gets one fresh review tonight.
+- **Restore drill** verifies each annotation under its own hash schema; its test now holds a
+  /1 row and a /2 row.
+- **Mutations, all caught (15):** API does not require a check; bare exit code accepted;
+  check allowed on a critique; check not scanned for secrets; /2 hash ignores the check;
+  /1 hash gains a check key (survived the first test, caught after adding the golden
+  vector); trigger fires on /1 rows; DB does not require a check; page drops the tally;
+  page hides missing checks; get_revision drops the check; drill ignores hash_schema; drill
+  ignores the check. `npm run check`: 154/154, demo passed.
+- `server.json` is unchanged: the registry listing names only the endpoint, which is the same.

@@ -4,11 +4,23 @@ import { invalid, notFound } from "../errors.ts";
 import { refuseSecrets, scanFlags, type GateFlag } from "../gate.ts";
 import { annotationHash, ANNOTATION_HASH_SCHEMA } from "../hash.ts";
 import { newId } from "../ids.ts";
-import { LIMITS, type AnnotationInput, type SourceRef } from "../schemas.ts";
+import { LIMITS, OUTCOMES_NEEDING_CHECK, type AnnotationInput, type OutcomeCheck, type SourceRef } from "../schemas.ts";
 import { nowIso } from "../time.ts";
 
 // Every annotation targets one exact revision, fixed at creation. A report that
 // something "worked" on revision 1 never becomes a report about revision 4.
+
+// "It exited 0" shows that a command ran, not that the result is right. A
+// check's observed text must say what the check showed.
+const BARE_SUCCESS =
+  /^(?:(?:exit(?:ed)?|return(?:ed)?|rc|status|code)(?: with)?(?: (?:code|status))?\s*[:=]?\s*0|0|ok|okay|success(?:ful)?|succeeded|pass(?:ed)?|done|works|worked|it worked|fine|no errors?)$/i;
+export function isBareSuccess(observed: string): boolean {
+  return BARE_SUCCESS.test(observed.trim().replace(/^["'`]+|["'`.!\s]+$/g, ""));
+}
+
+function checkTexts(check: OutcomeCheck | undefined): Record<string, string> {
+  return check ? { "check.ran": check.ran, "check.observed": check.observed } : {};
+}
 
 function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: AnnotationInput): GateFlag[] {
   const texts: Record<string, string> = { body: input.body };
@@ -18,6 +30,7 @@ function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: A
     if (e.title) texts[`evidence[${i}].title`] = e.title;
   });
   for (const [k, v] of Object.entries(input.conditions ?? {})) texts[`conditions.${k}`] = String(v);
+  Object.assign(texts, checkTexts(input.check));
   refuseSecrets(texts);
   if (input.kind === "outcome_report") {
     if (!input.outcome) throw invalid("outcome", "an outcome report needs an outcome");
@@ -31,8 +44,20 @@ function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: A
     if (Object.keys(input.conditions ?? {}).length === 0) {
       throw invalid("conditions", "say where you tested it (software versions, OS, date, ...)");
     }
+    if (!input.check && OUTCOMES_NEEDING_CHECK.includes(input.outcome)) {
+      throw invalid(
+        "check",
+        "say how you confirmed it: check.ran is what you ran to confirm the result (not the procedure's own steps), " +
+          "check.observed is what it showed",
+      );
+    }
+    if (input.check && isBareSuccess(input.check.observed)) {
+      throw invalid("check.observed", "say what the check showed, not only that it succeeded: an exit code alone does not show the result");
+    }
   } else if (input.outcome !== undefined) {
     throw invalid("outcome", "only an outcome_report carries an outcome");
+  } else if (input.check !== undefined) {
+    throw invalid("check", "only an outcome_report carries a check");
   }
 
   const exists = db.prepare("SELECT 1 FROM revisions WHERE id = ?");
@@ -53,7 +78,7 @@ function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: A
       );
     }
   }
-  return scanFlags({ body: input.body });
+  return scanFlags({ body: input.body, ...checkTexts(input.check) });
 }
 
 export function createAnnotation(
@@ -83,16 +108,18 @@ export function createAnnotation(
         body: input.body,
         evidence: input.evidence ?? [],
         conditions: input.conditions ?? {},
+        check: input.check ? { ran: input.check.ran, observed: input.check.observed } : null,
         supersedes_annotation_id: input.supersedes_annotation_id ?? null,
         created_at: nowIso(),
       };
       db.prepare(
         `INSERT INTO annotations (id, revision_id, author_id, kind, outcome, body, evidence,
-           conditions, supersedes_annotation_id, hash_schema, content_hash, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           conditions, check_json, supersedes_annotation_id, hash_schema, content_hash, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         fields.id, fields.revision_id, fields.author_id, fields.kind, fields.outcome,
         fields.body, JSON.stringify(fields.evidence), JSON.stringify(fields.conditions),
+        fields.check ? JSON.stringify(fields.check) : null,
         fields.supersedes_annotation_id, ANNOTATION_HASH_SCHEMA, annotationHash(fields),
         fields.created_at,
       );
@@ -115,6 +142,7 @@ interface AnnotationRow {
   body: string;
   evidence: string;
   conditions: string;
+  check_json: string | null;
   supersedes_annotation_id: string | null;
   hash_schema: string;
   content_hash: string;
@@ -140,6 +168,9 @@ export function annotationView(row: AnnotationRow) {
     body: row.body,
     evidence: JSON.parse(row.evidence) as SourceRef[],
     conditions: JSON.parse(row.conditions) as Record<string, unknown>,
+    // null on reports written before checks existed (hash schema /1), and on
+    // not_applicable / inconclusive reports that did not give one.
+    check: row.check_json ? (JSON.parse(row.check_json) as OutcomeCheck) : null,
     supersedes_annotation_id: row.supersedes_annotation_id,
     hash_schema: row.hash_schema,
     content_hash: row.content_hash,
@@ -160,12 +191,14 @@ export function getAnnotation(db: DB, annotationId: string) {
 export function reportCounts(db: DB, revisionId: string) {
   const rows = db
     .prepare(
-      `SELECT a.kind, a.outcome, ar.state FROM annotations a
+      `SELECT a.kind, a.outcome, a.check_json IS NOT NULL AS checked, ar.state FROM annotations a
          JOIN annotation_review ar ON ar.annotation_id = a.id
         WHERE a.revision_id = ? AND ar.state IN ('reviewed', 'candidate')`,
     )
-    .all(revisionId) as { kind: string; outcome: string | null; state: string }[];
+    .all(revisionId) as { kind: string; outcome: string | null; checked: number; state: string }[];
   const outcomes: Record<string, number> = {};
+  // The same tally, counting only reports that say how they were confirmed.
+  const outcomesWithCheck: Record<string, number> = {};
   let reviewed = 0;
   let candidate = 0;
   for (const r of rows) {
@@ -174,9 +207,12 @@ export function reportCounts(db: DB, revisionId: string) {
       continue;
     }
     reviewed++;
-    if (r.kind === "outcome_report" && r.outcome) outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
+    if (r.kind === "outcome_report" && r.outcome) {
+      outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
+      if (r.checked) outcomesWithCheck[r.outcome] = (outcomesWithCheck[r.outcome] ?? 0) + 1;
+    }
   }
-  return { outcomes, reviewed, candidate };
+  return { outcomes, outcomes_with_check: outcomesWithCheck, reviewed, candidate };
 }
 
 // Ordinary output shows reviewed annotations. Candidates appear only when the

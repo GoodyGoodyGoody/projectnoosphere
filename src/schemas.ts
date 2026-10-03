@@ -19,6 +19,8 @@ export const LIMITS = {
   pageDefault: 20,
   annotationBody: 20_000,
   outcomeReportMinBody: 40,
+  checkRan: 2000,
+  checkObserved: 4000,
 } as const;
 
 export const REVISION_KINDS = [
@@ -62,12 +64,21 @@ export interface RevisionInput {
   links?: LinkRef[];
 }
 
+// How an outcome report's author confirmed the result: what they ran (not the
+// procedure's own steps) and what it showed. Required for these outcomes.
+export interface OutcomeCheck {
+  ran: string;
+  observed: string;
+}
+export const OUTCOMES_NEEDING_CHECK: readonly Outcome[] = ["worked", "failed", "partially_worked"];
+
 export interface AnnotationInput {
   kind: AnnotationKind;
   outcome?: Outcome;
   body: string;
   evidence?: SourceRef[];
   conditions?: Conditions;
+  check?: OutcomeCheck;
   supersedes_annotation_id?: string;
 }
 
@@ -145,6 +156,15 @@ export const annotationInputSchema = {
     body: { type: "string", minLength: 1, maxLength: LIMITS.annotationBody },
     evidence: { type: "array", maxItems: LIMITS.sources, items: sourceRef },
     conditions,
+    check: {
+      type: "object",
+      additionalProperties: false,
+      required: ["ran", "observed"],
+      properties: {
+        ran: { type: "string", minLength: 1, maxLength: LIMITS.checkRan },
+        observed: { type: "string", minLength: 1, maxLength: LIMITS.checkObserved },
+      },
+    },
     supersedes_annotation_id: { type: "string", pattern: ID_PATTERN.annotation },
   },
 } as const;

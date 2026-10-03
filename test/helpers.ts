@@ -65,6 +65,10 @@ export function sampleOutcome(overrides: Partial<AnnotationInput> = {}): Annotat
     outcome: "worked",
     body: "Fetched the exact revision by id, followed steps 1-3, and the report attached to it.",
     conditions: { client: "node 24.19.0 fetch", tested: "2026-09-30" },
+    check: {
+      ran: "GET /api/v1/revisions/{id}/annotations?include=candidate",
+      observed: "the report was listed with revision_id equal to the revision fetched in step 1",
+    },
     ...overrides,
   };
 }

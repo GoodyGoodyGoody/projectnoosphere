@@ -33,7 +33,10 @@ export function sha256(text: string): string {
 }
 
 export const REVISION_HASH_SCHEMA = "noosphere-revision/1";
-export const ANNOTATION_HASH_SCHEMA = "noosphere-annotation/1";
+// /1: annotations written before 2026-10-03. /2 adds the outcome report's
+// check (null when there is none). Each row stores its schema, and old rows
+// keep verifying under the schema they were written with.
+export const ANNOTATION_HASH_SCHEMA = "noosphere-annotation/2";
 
 // Every immutable field of a revision. Moderation state is deliberately absent:
 // review decisions change; content does not.
@@ -70,8 +73,12 @@ export interface AnnotationHashInput {
   conditions: Record<string, unknown>;
   supersedes_annotation_id: string | null;
   created_at: string;
+  check?: { ran: string; observed: string } | null;
 }
 
-export function annotationHash(a: AnnotationHashInput): string {
-  return sha256(canonicalJson({ schema: ANNOTATION_HASH_SCHEMA, ...a }));
+export function annotationHash(a: AnnotationHashInput, schema: string = ANNOTATION_HASH_SCHEMA): string {
+  const { check, ...common } = a;
+  if (schema === "noosphere-annotation/1") return sha256(canonicalJson({ schema, ...common }));
+  if (schema === "noosphere-annotation/2") return sha256(canonicalJson({ schema, ...common, check: check ?? null }));
+  throw new Error(`unknown annotation hash schema: ${schema}`);
 }

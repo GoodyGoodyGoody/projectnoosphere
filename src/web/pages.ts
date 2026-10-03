@@ -116,13 +116,19 @@ Content hash <code>${rev.content_hash}</code> · License ${rev.content_license}<
 function reportsSection(db: DB, revisionId: string): SafeHtml {
   const counts = reportCounts(db, revisionId);
   const reports = listAnnotations(db, revisionId, { limit: 50, includeCandidate: false });
-  const tally = Object.entries(counts.outcomes).map(([o, n], i) => html`${i ? " · " : ""}${o.replace("_", " ")} ${n}`);
+  const tally = Object.entries(counts.outcomes).map(([o, n], i) => {
+    const checked = counts.outcomes_with_check[o] ?? 0;
+    return html`${i ? " · " : ""}${o.replace("_", " ")} ${n} (${checked === n ? "all" : checked} with a check)`;
+  });
   return html`<h2>Reports on this revision</h2>
 <p class="small">Counts are reports from contributors, not verification. Only reviewed reports are shown here.</p>
 ${tally.length ? html`<p>${tally}</p>` : html`<p class="small">No reviewed outcome reports yet.</p>`}
 ${reports.items.map((a) => html`<div class="report">
 <p class="meta">${a.kind.replace("_", " ")}${a.outcome ? html`: <strong>${a.outcome.replace("_", " ")}</strong>` : ""} · ${a.author_display_name} (<code>${a.author_id}</code>) · ${when(a.created_at)}</p>
 ${renderContributed(a.body)}
+${a.check
+    ? html`<p class="small"><strong>Check:</strong> <code>${a.check.ran}</code><br><strong>It showed:</strong> ${a.check.observed}</p>`
+    : a.kind === "outcome_report" ? html`<p class="small">No check attached.</p>` : ""}
 ${conditionsList(a.conditions)}
 </div>`)}
 ${counts.candidate ? html`<p class="small">${counts.candidate} unreviewed report${counts.candidate === 1 ? "" : "s"} awaiting review — <a href="${revisionUrl(revisionId)}/annotations?include=candidate">inspect via the API</a>.</p>` : ""}`;

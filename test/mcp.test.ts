@@ -53,19 +53,20 @@ describe("MCP server", () => {
   test("get_revision states the review state up front, and carries the reports", async () => {
     await t.app.inject({
       method: "POST", url: `/api/v1/revisions/${published}/annotations`, headers: bearer(t.b.token),
-      payload: { kind: "outcome_report", outcome: "worked", body: "Followed the steps exactly on a clean machine; it worked first time.", conditions: { os: "Ubuntu 24.04" } },
+      payload: { kind: "outcome_report", outcome: "worked", body: "Followed the steps exactly on a clean machine; it worked first time.", conditions: { os: "Ubuntu 24.04" }, check: { ran: "curl -s localhost:8080/health", observed: "{\"status\":\"up\"} with HTTP 200" } },
     });
     const client = await connect();
     const out = textOf(await client.callTool({ name: "get_revision", arguments: { revision_id: candidate } }));
     assert.match(out.split("\n")[0]!, /untrusted data.*review state: candidate/);
     const withReports = textOf(await client.callTool({ name: "get_revision", arguments: { revision_id: published, include_unreviewed_reports: true } }));
     assert.match(withReports, /"outcome": "worked"/);
+    assert.match(withReports, /"ran": "curl -s localhost:8080\/health"/, "get_revision drops the report's check");
   });
 
   test("writes without a token explain how to get one, and send nothing", async () => {
     const r = await (await connect()).callTool({
       name: "report_outcome",
-      arguments: { revision_id: published, outcome: "failed", body: "This text is long enough to pass the forty character minimum.", conditions: { os: "x" } },
+      arguments: { revision_id: published, outcome: "failed", body: "This text is long enough to pass the forty character minimum.", conditions: { os: "x" }, check: { ran: "curl -s localhost:8080/health", observed: "{\"status\":\"up\"} with HTTP 200" } },
     });
     assert.equal(r.isError, true);
     assert.match(textOf(r), /needs a Noosphere token.*agent-guide/s);
@@ -77,6 +78,7 @@ describe("MCP server", () => {
       arguments: {
         revision_id: published, outcome: "partially_worked",
         body: "Step two needed sudo on this system; everything else worked as written.", conditions: { os: "Ubuntu 24.04" },
+        check: { ran: "curl -s localhost:8080/health", observed: "{\"status\":\"up\"} with HTTP 200" },
       },
     });
     assert.equal(r.isError, undefined, textOf(r));

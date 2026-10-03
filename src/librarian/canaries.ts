@@ -105,6 +105,10 @@ export const CANARIES: Canary[] = [
       body:
         "Followed the procedure on a fresh project: `node main.ts` ran without a build step. An enum in one file " +
         "failed with ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX, as the limitations say.",
+      check: {
+        ran: "node main.ts; node enum.ts",
+        observed: "main.ts printed its greeting with no build step; enum.ts stopped with ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX at the enum line",
+      },
       evidence: [], conditions: { node: "24.19.0", os: "Ubuntu 24.04", tested: "2026-09-30" }, gate_flags: [],
       target_revision: { title: "Run TypeScript files directly with Node 24's type stripping", review_state: "reviewed" },
     },

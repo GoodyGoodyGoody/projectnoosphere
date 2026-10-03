@@ -94,6 +94,10 @@ try {
       "binaries, so the claim is likely broader than linux-x64 — but I only tested x64.",
     evidence: [{ revision_id: rev1, note: "the exact revision tested" }],
     conditions: { node: "24.19.0", npm: "11.17.0", os: "Ubuntu 24.04 x64", tested: "2026-09-30" },
+    check: {
+      ran: "node -e \"console.log(new (require('better-sqlite3'))(':memory:').prepare('select sqlite_version() v').get().v)\"",
+      observed: "3.53.4",
+    },
   });
   assert.equal(report.status, 201);
   const annId: string = report.json.annotation.id;

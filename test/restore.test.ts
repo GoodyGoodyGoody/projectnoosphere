@@ -4,6 +4,8 @@ import { copyFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { checkBackup } from "../scripts/restore-check.ts";
+import { annotationHash } from "../src/hash.ts";
+import { newId } from "../src/ids.ts";
 import { bearer, propose, publish, publishedRecord, sampleOutcome, setup } from "./helpers.ts";
 
 describe("backup restore check", () => {
@@ -15,6 +17,20 @@ describe("backup restore check", () => {
     const r = await publishedRecord(t, t.a.token, { title: "Restorable record" });
     known = r.revisionId;
     await t.app.inject({ method: "POST", url: `/api/v1/revisions/${r.revisionId}/annotations`, headers: bearer(t.b.token), payload: sampleOutcome() });
+    // A report from before checks existed (hash schema /1, no check_json), as
+    // the live database holds: the drill must verify both kinds.
+    const old = {
+      id: newId("ann"), revision_id: r.revisionId, author_id: t.b.id, kind: "outcome_report", outcome: "worked",
+      body: "Followed it before checks were asked for; it worked as written.", evidence: [], conditions: { os: "x" },
+      supersedes_annotation_id: null, created_at: "2026-10-01T00:00:00.000Z",
+    };
+    t.db.prepare(
+      `INSERT INTO annotations (id, revision_id, author_id, kind, outcome, body, evidence, conditions, check_json,
+         supersedes_annotation_id, hash_schema, content_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, '[]', '{"os":"x"}', NULL, NULL, 'noosphere-annotation/1', ?, ?)`,
+    ).run(old.id, old.revision_id, old.author_id, old.kind, old.outcome, old.body,
+      annotationHash(old, "noosphere-annotation/1"), old.created_at);
+    t.db.prepare("INSERT INTO annotation_review (annotation_id, state, reason, updated_at) VALUES (?, 'candidate', NULL, ?)").run(old.id, old.created_at);
     const r2 = (await propose(t.app, t.b.token, r.recordId, r.revisionId, { title: "Restorable, corrected" })).json().revision.id;
     await publish(t.app, t.s.token, r2);
     // The same online-backup API data-backup.sh uses (sqlite3 .backup).
@@ -28,7 +44,7 @@ describe("backup restore check", () => {
     assert.deepEqual(report.problems, []);
     assert.equal(report.ok, true);
     assert.equal(report.counts.revisions, 2);
-    assert.equal(report.counts.annotations, 1);
+    assert.equal(report.counts.annotations, 2);
     assert.ok(report.counts.moderation_events! >= 2);
   });
 

@@ -111,8 +111,12 @@ Two review states are easy to confuse:
   `{schema:"noosphere-revision/1", id, record_id, base_revision_id, parent_revision_id,
   author_id, kind, title, summary, body_markdown, tags, sources, conditions, links,
   content_license, created_at}`.
-- **Annotations.** It uses `schema:"noosphere-annotation/1"` with the fields `id, revision_id,
-  author_id, kind, outcome, body, evidence, conditions, supersedes_annotation_id, created_at`.
+- **Annotations.** Each annotation records its `hash_schema`; verify with that one.
+  - `noosphere-annotation/2` (since v0.1.10, 2026-10-03): the fields `id, revision_id,
+    author_id, kind, outcome, body, evidence, conditions, check, supersedes_annotation_id,
+    created_at`, where `check` is `null` when absent.
+  - `noosphere-annotation/1` (earlier annotations): the same fields without `check`; the key
+    is absent, not null.
 - **Canonical JSON:**
   - object keys are sorted by UTF-16 code unit;
   - there is no whitespace;
@@ -327,6 +331,17 @@ ULID (creation) order. A response includes `next_cursor`, or null.
 - Internal `revision_id` references must exist.
 - An `outcome_report` needs an outcome, a body of ≥ 40 characters, and non-empty
   `conditions`. No other annotation kind may carry an outcome.
+- An `outcome_report` of `worked`, `failed` or `partially_worked` needs a `check`
+  (since v0.1.10): `{ran, observed}`, saying what the reporter ran to confirm the result
+  (not the procedure's own steps) and what it showed. `observed` may not be a bare claim of
+  success such as `exit code 0` or `ok`. Only outcome reports carry a check.
+  - Enforced in the API (400 naming `check` or `check.observed`) and, for hash schema /2
+    rows, by a database trigger. The trigger ignores /1 rows, so the previous release still
+    runs against the new schema.
+  - Page tallies count reports with a check separately; reports without one are labelled
+    "No check attached".
+  - The librarian (rubric-2) holds a report whose check does not observe the result the
+    revision claims.
 
 **Sources.** Each source has exactly one of `url` (`http(s)`) or `revision_id`, plus a required
 `note`. They are stored as references. **The server never fetches them.**

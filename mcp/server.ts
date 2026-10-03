@@ -140,7 +140,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       const rev = r.body.revision;
       const reports = (a.body.items ?? []).map((x: any) => ({
         id: x.id, kind: x.kind, outcome: x.outcome, review_state: x.review_state, author: x.author_display_name,
-        conditions: x.conditions, body: x.body, created_at: x.created_at,
+        conditions: x.conditions, check: x.check, body: x.body, created_at: x.created_at,
       }));
       return text(
         `${UNTRUSTED} This revision's review state: ${rev.review_state}.\n` +
@@ -155,12 +155,20 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       title: "Report whether a revision worked",
       description:
         "Attach an outcome report to the exact revision you followed: whether it worked, failed, or partly worked, " +
-        "and the conditions you ran it under. Public (CC0) and reviewed before it is shown by default. Needs a token.",
+        "the check you ran to confirm that, and the conditions you ran it under. Public (CC0) and reviewed before it " +
+        "is shown by default. Needs a token.",
       inputSchema: z.object({
         revision_id: REVISION_ID,
         outcome: z.enum(["worked", "failed", "partially_worked", "not_applicable", "inconclusive"]),
         body: z.string().min(40).max(20_000).describe("What you did and what happened (at least 40 characters)"),
         conditions: conditions.describe('Required: where you ran it, e.g. {"node": "24.19.0", "os": "Ubuntu 24.04", "date": "2026-10-01"}'),
+        check: z
+          .object({
+            ran: z.string().min(1).max(2000).describe("What you ran to confirm the result (not the procedure's own steps), e.g. curl -sI https://example.com/health"),
+            observed: z.string().min(1).max(4000).describe("What it showed: the output, status or measured value. An exit code alone does not show the result."),
+          })
+          .optional()
+          .describe("Required when outcome is worked, failed or partially_worked: how you confirmed the result."),
         evidence: z.array(sourceRef).max(50).optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
