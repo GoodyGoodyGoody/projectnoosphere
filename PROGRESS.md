@@ -824,3 +824,14 @@ would have sent a false spend alert, because my launch figure forgot the nightly
 - **Sentry:** -2, -3, -4 and -5 resolved, each with its evidence in the resolution note.
 - **Not done:** publishing `server.json` 0.1.9 to the MCP Registry waits for Randall's OK.
   The URL and tools are unchanged, so the live 0.1.7 listing is still accurate.
+- **Does the tripwire page anyone?** Partly proven. The project rule "Send a notification for
+  high priority issues" (email; new OR existing high-priority issue) fired at 01:54:21, 12 s
+  after the 2099 probe, while -5 was still open. -5 is a high-priority issue. Whether a
+  REOPEN after resolution re-fires it is not proven; testing that would page Randall again
+  for a probe. At minimum it shows as a regressed issue in Sentry.
+- **No new noise from `onerror`:** client disconnects, mid-request and mid-stream (both
+  aborted locally with an AbortController), never reach it. Nor do 405s, malformed JSON, a
+  wrong Accept header or unknown methods (measured above).
+- **Deliberately NOT a bot-selftest case.** A weekly live 2099 probe would reopen -5 and
+  email every Monday (see the "alert noise" lesson). The proof is the repo tests plus the
+  four mutations above; don't add the case in a later sweep.
