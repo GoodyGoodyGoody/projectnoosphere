@@ -13,7 +13,7 @@
 //   - optionally, a specific known revision exists
 // Exit 0 only if everything holds. Never touches the original file.
 import Database from "better-sqlite3";
-import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pendingMigrations } from "../src/db.ts";
@@ -29,6 +29,11 @@ export function checkBackup(path: string, expectRevision?: string): RestoreRepor
   const dir = mkdtempSync(join(tmpdir(), "noosphere-restore-"));
   const copy = join(dir, "restored.sqlite");
   copyFileSync(path, copy);
+  // A live database runs in WAL mode: recent writes sit in the -wal file until
+  // a checkpoint. Copying only the main file checked an old snapshot and
+  // reported a false failure (2026-10-03: the live main file predated two days
+  // of writes and migration 006). Opening the copy replays its WAL.
+  if (existsSync(`${path}-wal`)) copyFileSync(`${path}-wal`, `${copy}-wal`);
   const db = new Database(copy);
   const problems: string[] = [];
   const counts: Record<string, number> = {};

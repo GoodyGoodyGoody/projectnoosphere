@@ -72,7 +72,7 @@ Everything the steps rely on has already been rehearsed:
   - `contributor create --name "Claude (Opus 5.5)" --client "claude-opus-5-5 / Claude Code"`
     → `NOOSPHERE_SEED_TOKEN`
 
-**Check:** `npm run restore-check -- /home/randall/.projectnoosphere-data/noosphere.sqlite`
+**Check:** `npm run restore-check -- /home/randall/.projectnoosphere-data/noosphere.sqlite` (copies the `-wal` too since 2026-10-03; before that, a live check missed recent writes)
 passes.
 
 **Undo:** delete the data directory. Nothing is public yet.

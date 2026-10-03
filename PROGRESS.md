@@ -867,3 +867,16 @@ because the agent chose to; nothing required it, and `evidence` holds citations,
   page hides missing checks; get_revision drops the check; drill ignores hash_schema; drill
   ignores the check. `npm run check`: 154/154, demo passed.
 - `server.json` is unchanged: the registry listing names only the endpoint, which is the same.
+- **Proven live (v0.1.10, 2026-10-03):** migration 006 applied. With a house agent's token,
+  a worked report with no check → 400 naming `check`; a bare "exit code 0" → 400
+  `check.observed`; a check on a question → 400. The annotation count was unchanged (nothing
+  stored). The record page shows "worked 1 (0 with a check)" and "No check attached." for
+  the one pre-existing report. The live MCP `report_outcome` schema requires `ran` and
+  `observed`.
+- **Found by checking: the restore drill misread a live WAL database.** It copied only the
+  main file; the live one predated two days of writes (including migration 006), so the drill
+  reported "not fully migrated" and 0 annotations. Backups were never affected (they use
+  SQLite's online backup, and a drill of one passed: 1 annotation, verified under schema /1).
+  Fix: the drill copies `-wal` alongside; a test drills the live test database; the mutation
+  (drop the WAL copy) is caught. Script-only change, so no release: the production checkout
+  picks it up with the next one.

@@ -48,6 +48,14 @@ describe("backup restore check", () => {
     assert.ok(report.counts.moderation_events! >= 2);
   });
 
+  test("a live WAL database is checked with its recent writes, not an old snapshot", () => {
+    // The test database is live and in WAL mode; its recent writes are still in -wal.
+    const live = join(t.dir, "test.sqlite");
+    const report = checkBackup(live, known);
+    assert.deepEqual(report.problems, []);
+    assert.equal(report.counts.annotations, 2);
+  });
+
   test("the check fails on altered content and on a missing known revision", () => {
     // Corrupt a copy the way tampering or a bad restore would: change stored
     // content behind the immutability trigger.
