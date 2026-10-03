@@ -26,12 +26,15 @@ export function shouldReport(err: unknown): boolean {
   return statusFor(err) >= 500;
 }
 
-// MCP transport errors arrive through Sentry's MCP integration, not Fastify.
-// Malformed or invalid requests are the client's mistake: drop them. An
+// MCP transport errors arrive through Sentry's MCP integration (inside a
+// server) or through the SDK's onerror (requests rejected before any server
+// exists, src/mcp-http.ts). The latter are prefixed "Rejected inbound request
+// (<cell>): ". Malformed or invalid requests are the client's mistake: drop them. An
 // unsupported protocol version is different: it means the endpoint is behind
 // the protocol (how PROJECTNOOSPHERE-5 was found), so keep it as a warning.
 export type McpTriage = "keep" | "warn" | "drop";
 export function triageMcpError(message: string): McpTriage {
+  message = message.replace(/^Rejected inbound request \([^)]*\):\s*/, "");
   if (/unsupported protocol version/i.test(message)) return "warn";
   if (/^(Error: )?(Bad Request|Invalid params|Invalid Request|Parse error|Method not found|Not Acceptable|Unsupported Media Type)\b/i.test(message)) return "drop";
   return "keep";

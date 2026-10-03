@@ -122,14 +122,21 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
     `mcp-publisher login dns --domain projectnoosphere.org --private-key <hex from that key>`.
   - The registry is in preview and may reset; if the listing disappears, publish again.
 
-## Sentry: report server faults only (`src/error-status.ts`, since v0.1.8)
+## Sentry: report server faults only (`src/error-status.ts`, since v0.1.8–0.1.9)
 - Sentry's default Fastify rule reads the reply status at the moment the error is thrown,
   before our error handler has set the 400/401, so client mistakes were reported as errors
   (PROJECTNOOSPHERE-2/3/4). `instrument.ts` passes `shouldReport` (status >= 500) to
   `fastifyIntegration`, and `app.ts` uses the same `statusFor`.
-- MCP transport errors (mechanism `auto.ai.mcp*`) go through `triageMcpError`: malformed
+- MCP errors reach Sentry two ways, and both go through `triageMcpError`: malformed
   requests are dropped; "unsupported protocol version" is kept as a **warning**, because
   that is how the endpoint falling behind the protocol shows up.
+  - Errors inside a server: Sentry's MCP integration (mechanism `auto.ai.mcp*`), filtered
+    in `instrument.ts`'s `beforeSend`.
+  - Requests the SDK rejects BEFORE any server exists, a future protocol version among
+    them: Sentry's integration hooks `McpServer` and never sees these. They arrive via
+    `createMcpHandler`'s `onerror` and go to the route's reporter (`McpReporter`, tag
+    `mcp:rejected_request`). v0.1.8 shipped without this; a live probe with a 2099-01-01
+    client produced no event, which is how it was found (v0.1.9).
 - `/mcp` is hijacked, so its handler reports its own crashes.
 
 ## Security of content

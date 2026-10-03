@@ -795,3 +795,25 @@ would have sent a false spend alert, because my launch figure forgot the nightly
     "Invalid params" kept.
 - **Packaging:** `@modelcontextprotocol/client` and the v1 `sdk` are devDependencies (tests
   only). `npm audit --omit=dev`: 0. `server.json` is 0.1.8.
+
+### Proven live (v0.1.8, released 2026-10-03 01:49 UTC), and the v0.1.9 follow-up
+
+- **Clean install:** a fresh clone at the release commit passed `npm ci` and `npm run check`.
+  The `allow-scripts` warning about better-sqlite3 is advisory: the install script still
+  ran, and SQLite loaded.
+- **Against https://projectnoosphere.org/mcp:** a v2 client pinned to 2026-07-28 got the
+  modern era, the six tools and a real search; the v1 client did the same in the legacy era.
+  `~/bin/noosphere-mcp --as claude` (stdio, production code) did the same in the 2026 era.
+- **Noise fix:** deliberate 401s and a 400 on `/api/v1/records` produced no Sentry error
+  events. The check could have failed: transactions from the new workers kept arriving.
+- **Found by checking: the protocol tripwire was dead.** A well-formed 2026 client
+  rewritten to claim 2099-01-01 got the right refusal (HTTP 400, -32022), but no Sentry
+  event. SDK v2 rejects it in `createMcpHandler`, before any `McpServer` exists, and
+  Sentry's integration hooks `McpServer`. Fix (v0.1.9): the handler's `onerror` feeds
+  the same triage. Measured first, so ordinary traffic stays quiet: GET/DELETE 405s,
+  malformed JSON, a wrong Accept header and unknown methods never reach `onerror`, and
+  envelope rejections arrive prefixed `Rejected inbound request (<cell>): `, which the
+  triage now strips.
+  - Tests: a future-version client must be reported as a warning; a malformed request
+    must not be reported. Four mutations caught: report nothing; report as error;
+    ignore "drop"; prefix not stripped.

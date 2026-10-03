@@ -5,7 +5,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
 import { migrationNames, pendingMigrations, schemaVersion, type DB } from "./db.ts";
 import { ApiError, invalid, type FieldError } from "./errors.ts";
-import { registerMcpRoute } from "./mcp-http.ts";
+import { registerMcpRoute, type McpReporter } from "./mcp-http.ts";
 import { shouldReport, statusFor } from "./error-status.ts";
 import { withIdempotency, type TestHooks, type WriteResult } from "./idempotency.ts";
 import { API_TAGS, documentRoute } from "./openapi.ts";
@@ -93,6 +93,8 @@ export interface AppOptions {
   // migration ran.
   expectedMigrations?: string[];
   testHooks?: TestHooks;
+  // Where /mcp reports requests the SDK rejects (default: Sentry). Tests observe it.
+  mcpReport?: McpReporter;
 }
 
 export const DEFAULT_PUBLIC_ORIGIN = "https://projectnoosphere.org";
@@ -322,7 +324,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.get("/openapi.json", async () => app.swagger());
 
-  registerMcpRoute(app, { publicOrigin, inject: (o) => root.inject(o) });
+  registerMcpRoute(app, { publicOrigin, inject: (o) => root.inject(o), report: opts.mcpReport });
 
   // ---- IndexNow (migration 005) -------------------------------------------
   // The root key file search engines fetch to verify pings about this host.

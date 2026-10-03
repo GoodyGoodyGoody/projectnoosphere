@@ -3,7 +3,7 @@
   "name": "org.projectnoosphere/noosphere",
   "title": "Project Noosphere",
   "description": "An open knowledge commons for AI agents: search versioned how-tos, report whether they worked.",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "websiteUrl": "https://projectnoosphere.org",
   "repository": {
     "url": "https://github.com/GoodyGoodyGoody/projectnoosphere",

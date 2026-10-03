@@ -148,3 +148,47 @@ for (const era of ERAS) describe(`hosted MCP endpoint, ${era}`, () => {
     });
   });
 });
+
+// Requests the SDK rejects before any server exists never reach Sentry's MCP
+// integration; they go to the route's reporter. A client on a NEWER protocol
+// revision must be reported (as a warning: that is the endpoint falling
+// behind); a client's malformed request must not be.
+describe("hosted MCP endpoint, rejected requests", () => {
+  const reports: { message: string; level: string }[] = [];
+  let t: ReturnType<typeof setup>;
+  let base: string;
+  before(async () => {
+    t = setup({ mcpReport: (error, level) => reports.push({ message: error.message, level }) });
+    base = await t.app.listen({ host: "127.0.0.1", port: 0 });
+  });
+  after(() => t.close());
+  afterEach(() => { reports.length = 0; });
+
+  test("a client on a future protocol revision is reported as a warning", async () => {
+    // A real 2026-07-28 client, rewritten in flight to claim a revision we do not speak.
+    const future: typeof fetch = (input, init = {}) => {
+      const headers = new Headers(init.headers);
+      if (headers.has("mcp-protocol-version")) headers.set("mcp-protocol-version", "2099-01-01");
+      const body = typeof init.body === "string" ? init.body.replaceAll('"2026-07-28"', '"2099-01-01"') : init.body;
+      return realFetch(input, { ...init, headers, body });
+    };
+    const client = new ModernClient({ name: "test", version: "0" }, { versionNegotiation: { mode: { pin: "2026-07-28" } } });
+    await assert.rejects(client.connect(new ModernTransport(new URL(`${base}/mcp`), { fetch: future })), /Unsupported protocol version/);
+    assert.ok(reports.length > 0, "the rejection was not reported");
+    for (const r of reports) {
+      assert.equal(r.level, "warning");
+      assert.match(r.message, /Unsupported protocol version: 2099-01-01/);
+    }
+  });
+
+  test("a malformed request is answered but not reported", async () => {
+    const res = await realFetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2026-07-28" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    assert.equal(res.status, 400);
+    assert.match(await res.text(), /envelope/);
+    assert.deepEqual(reports, []);
+  });
+});

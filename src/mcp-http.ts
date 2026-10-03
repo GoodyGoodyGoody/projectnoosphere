@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/node";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { buildNoosphereMcp } from "../mcp/server.ts";
+import { triageMcpError } from "./error-status.ts";
 
 // The hosted MCP endpoint: /mcp serves the same six tools as mcp/server.ts to
 // clients that connect by URL. createMcpHandler (SDK v2) speaks protocol
@@ -56,7 +57,16 @@ export function inProcessFetch(inject: Inject, clientIp: string): typeof fetch {
 // SDK's authInfo, which reaches the factory untouched on both protocol eras.
 type Caller = { token: string; clientIp: string } & Record<string, unknown>;
 
-export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: string; inject: Inject }): void {
+// Where requests the SDK rejects before any server exists are reported. Sentry's
+// MCP integration hooks McpServer, so it never sees these, and they include the
+// one worth knowing about: a client on a protocol revision newer than ours.
+export type McpReporter = (error: Error, level: "warning" | "error") => void;
+const sentryReport: McpReporter = (error, level) => {
+  Sentry.captureException(error, { level, tags: { mcp: "rejected_request" } });
+};
+
+export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: string; inject: Inject; report?: McpReporter }): void {
+  const report = opts.report ?? sentryReport;
   const handler = createMcpHandler(({ authInfo }) => {
     const caller = authInfo?.extra as Partial<Caller> | undefined;
     // Never fall back to a default address: rate limits would silently treat
@@ -67,6 +77,11 @@ export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: str
       token: caller.token || undefined,
       fetch: inProcessFetch(opts.inject, caller.clientIp),
     });
+  }, {
+    onerror: (error) => {
+      const verdict = triageMcpError(error.message);
+      if (verdict !== "drop") report(error, verdict === "warn" ? "warning" : "error");
+    },
   });
   const node = toNodeHandler(handler);
 

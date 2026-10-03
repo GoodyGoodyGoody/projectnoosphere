@@ -17,4 +17,7 @@ test("MCP transport errors: client mistakes dropped, protocol gaps kept as warni
   assert.equal(triageMcpError("Invalid params: missing the required per-request envelope key(s): _meta"), "drop");
   assert.equal(triageMcpError("Error: Parse error: Invalid JSON"), "drop");
   assert.equal(triageMcpError("TypeError: cannot read properties of undefined"), "keep");
+  // As the SDK's onerror delivers them (strings captured from @modelcontextprotocol/server 2.3.0).
+  assert.equal(triageMcpError("Rejected inbound request (modern-header-without-claim): Invalid params: the MCP-Protocol-Version header names protocol revision 2026-07-28, but the request is missing the required per-request envelope key(s): _meta"), "drop");
+  assert.equal(triageMcpError("Unsupported protocol version: 2099-01-01"), "warn");
 });
