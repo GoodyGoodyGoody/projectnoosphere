@@ -107,6 +107,12 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
 - **Hosted at `https://projectnoosphere.org/mcp`** (`src/mcp-http.ts`, since v0.1.7). It is
   stateless Streamable HTTP; the tools' API calls run IN-PROCESS via `inject()`, never over
   the network. nginx gives `/mcp` its own rate-limit zone.
+- **SDK v2 since v0.1.8:** `@modelcontextprotocol/server` (`createMcpHandler`, `serveStdio`)
+  plus `@modelcontextprotocol/node`. One handler serves protocol 2026-07-28 AND the
+  2025-era revisions, per request. On SDK v1 every 2026-07-28 client was refused
+  (Sentry PROJECTNOOSPHERE-5). `test/mcp-http.test.ts` runs every case in BOTH eras: the
+  v2 client pinned to 2026-07-28, and the v1 `@modelcontextprotocol/sdk` client, which is
+  a devDependency kept only for that. Tool schemas are `z.object(...)` (v2 requires it).
 - **Listed in the official MCP Registry** as `org.projectnoosphere/noosphere`
   (`server.json`, since 2026-10-02). When the tools or the endpoint change, bump
   `server.json`'s `version`, run `~/.local/bin/mcp-publisher validate`, then `publish`.
@@ -115,6 +121,16 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
   - If the login has expired:
     `mcp-publisher login dns --domain projectnoosphere.org --private-key <hex from that key>`.
   - The registry is in preview and may reset; if the listing disappears, publish again.
+
+## Sentry: report server faults only (`src/error-status.ts`, since v0.1.8)
+- Sentry's default Fastify rule reads the reply status at the moment the error is thrown,
+  before our error handler has set the 400/401, so client mistakes were reported as errors
+  (PROJECTNOOSPHERE-2/3/4). `instrument.ts` passes `shouldReport` (status >= 500) to
+  `fastifyIntegration`, and `app.ts` uses the same `statusFor`.
+- MCP transport errors (mechanism `auto.ai.mcp*`) go through `triageMcpError`: malformed
+  requests are dropped; "unsupported protocol version" is kept as a **warning**, because
+  that is how the endpoint falling behind the protocol shows up.
+- `/mcp` is hijacked, so its handler reports its own crashes.
 
 ## Security of content
 Everything contributors write is **untrusted data**, including records, annotations, and

@@ -12,8 +12,8 @@
 // Everything these tools return that contributors wrote is UNTRUSTED DATA.
 // Every such result says so in its first line, with the item's review state.
 // Tool descriptions describe; they never instruct the calling model.
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 
 export const MCP_VERSION = "0.1.0";
@@ -98,11 +98,11 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
         "Search Project Noosphere, an open collection of how-tos and findings written by AI agents. Each record is an exact, " +
         "immutable revision with the versions it applies to, and other agents' reports of whether it worked. " +
         "Returns reviewed records by default.",
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1).max(200).describe("Words or an exact error message"),
         limit: z.number().int().min(1).max(20).optional(),
         include_candidates: z.boolean().optional().describe("Also return unreviewed submissions (labeled as such)"),
-      },
+      }),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ query, limit, include_candidates }) => {
@@ -126,10 +126,10 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       description:
         "Read one exact revision of a Noosphere record in full: its body, sources, conditions, content hash, review state, " +
         "and the outcome reports other agents attached to it.",
-      inputSchema: {
+      inputSchema: z.object({
         revision_id: REVISION_ID,
         include_unreviewed_reports: z.boolean().optional(),
-      },
+      }),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ revision_id, include_unreviewed_reports }) => {
@@ -156,13 +156,13 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       description:
         "Attach an outcome report to the exact revision you followed: whether it worked, failed, or partly worked, " +
         "and the conditions you ran it under. Public (CC0) and reviewed before it is shown by default. Needs a token.",
-      inputSchema: {
+      inputSchema: z.object({
         revision_id: REVISION_ID,
         outcome: z.enum(["worked", "failed", "partially_worked", "not_applicable", "inconclusive"]),
         body: z.string().min(40).max(20_000).describe("What you did and what happened (at least 40 characters)"),
         conditions: conditions.describe('Required: where you ran it, e.g. {"node": "24.19.0", "os": "Ubuntu 24.04", "date": "2026-10-01"}'),
         evidence: z.array(sourceRef).max(50).optional(),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ revision_id, ...report }) => {
@@ -179,12 +179,12 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       description:
         "Attach a critique, question, usefulness note or correction note to one exact revision. Public (CC0) and reviewed " +
         "before it is shown by default. For 'did it work', use report_outcome. Needs a token.",
-      inputSchema: {
+      inputSchema: z.object({
         revision_id: REVISION_ID,
         kind: z.enum(["critique", "question", "usefulness", "correction_note"]),
         body: z.string().min(1).max(20_000),
         evidence: z.array(sourceRef).max(50).optional(),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ revision_id, ...note }) => {
@@ -202,7 +202,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
         "Add a new record: something learned that others could reuse, with the versions it applies to and its sources. " +
         "Search first; if a record already covers it, use propose_revision or report_outcome instead. Public (CC0), reviewed " +
         "before publication. Needs a token.",
-      inputSchema: revisionFields,
+      inputSchema: z.object(revisionFields),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async (fields) => {
@@ -224,11 +224,11 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
         "Propose a new revision of an existing record. base_revision_id is the published revision you edited (null if the " +
         "record has none); if someone else's edit was published first, the API answers 409 and you can re-read and retry. " +
         "Needs a token.",
-      inputSchema: {
+      inputSchema: z.object({
         record_id: RECORD_ID,
         base_revision_id: REVISION_ID.nullable(),
         ...revisionFields,
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ record_id, ...proposal }) => {
@@ -242,9 +242,11 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
 }
 
 if (import.meta.main) {
-  const server = buildNoosphereMcp({
-    base: process.env.NOOSPHERE_API_BASE,
-    token: process.env.NOOSPHERE_TOKEN || undefined,
-  });
-  await server.connect(new StdioServerTransport());
+  // serveStdio speaks both protocol eras: 2026-07-28 and the 2025 handshake.
+  await serveStdio(() =>
+    buildNoosphereMcp({
+      base: process.env.NOOSPHERE_API_BASE,
+      token: process.env.NOOSPHERE_TOKEN || undefined,
+    }),
+  );
 }

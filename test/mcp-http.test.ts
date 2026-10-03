@@ -1,15 +1,21 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, describe, test } from "node:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client as LegacyClient } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport as LegacyTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client as ModernClient, StreamableHTTPClientTransport as ModernTransport } from "@modelcontextprotocol/client";
 import { ipHash } from "../src/limits.ts";
 import { createRecordAs, publish, sampleRecord, setup } from "./helpers.ts";
 
-// The hosted endpoint (POST /mcp, src/mcp-http.ts), driven by the SDK's own
-// HTTP client against a real listening app.
+// The hosted endpoint (/mcp, src/mcp-http.ts), driven by real MCP clients
+// against a real listening app, in BOTH protocol eras: the v1 SDK's client
+// (2025-era handshake) and a v2 client pinned to 2026-07-28, the revision
+// that SDK v1 turned away (Sentry PROJECTNOOSPHERE-5). Every test below runs
+// once per era.
 const realFetch = globalThis.fetch;
+const ERAS = ["2025 era (v1 client)", "2026-07-28 (v2 client, pinned)"] as const;
 
-describe("hosted MCP endpoint", () => {
+for (const era of ERAS) describe(`hosted MCP endpoint, ${era}`, () => {
+  const modern = era.startsWith("2026");
   let outbound: string[];
   // The server must never call out. While these tests run, any use of the
   // GLOBAL fetch records the attempt and fails; only the test's client has
@@ -23,9 +29,16 @@ describe("hosted MCP endpoint", () => {
   };
   afterEach(() => { globalThis.fetch = realFetch; });
 
-  const connect = async (base: string, headers: Record<string, string> = {}) => {
-    const client = new Client({ name: "test", version: "0" });
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { fetch: realFetch, requestInit: { headers } }));
+  const connect = async (base: string, headers: Record<string, string> = {}): Promise<any> => {
+    const url = new URL(`${base}/mcp`);
+    if (modern) {
+      const client = new ModernClient({ name: "test", version: "0" }, { versionNegotiation: { mode: { pin: "2026-07-28" } } });
+      await client.connect(new ModernTransport(url, { fetch: realFetch, requestInit: { headers } }));
+      assert.equal(client.getProtocolEra(), "modern");
+      return client;
+    }
+    const client = new LegacyClient({ name: "test", version: "0" });
+    await client.connect(new LegacyTransport(url, { fetch: realFetch, requestInit: { headers } }));
     return client;
   };
   const textOf = (r: any) => (r.content as { text: string }[]).map((c) => c.text).join("\n");
@@ -45,10 +58,21 @@ describe("hosted MCP endpoint", () => {
     });
     after(() => t.close());
 
+    test("tool schemas keep their required fields and read-only hints", async () => {
+      const tools = (await (await connect(base)).listTools()).tools as any[];
+      const report = tools.find((x) => x.name === "report_outcome");
+      for (const field of ["revision_id", "outcome", "body", "conditions"]) {
+        assert.ok(report.inputSchema.required?.includes(field), `report_outcome no longer requires ${field}`);
+      }
+      assert.equal(report.inputSchema.properties.body.minLength, 40);
+      for (const name of ["search", "get_revision"]) assert.equal(tools.find((x) => x.name === name).annotations?.readOnlyHint, true);
+      assert.equal(tools.find((x) => x.name === "create_record").inputSchema.properties.kind.enum.length, 6);
+    });
+
     test("lists the six tools and answers a search entirely in-process", async () => {
       forbidOutbound();
       const client = await connect(base);
-      const tools = (await client.listTools()).tools.map((x) => x.name).sort();
+      const tools = (await client.listTools()).tools.map((x: any) => x.name).sort();
       assert.deepEqual(tools, ["annotate", "create_record", "get_revision", "propose_revision", "report_outcome", "search"]);
       const out = textOf(await client.callTool({ name: "search", arguments: { query: "quokka" } }));
       assert.match(out, /^Contributed content from Project Noosphere/);

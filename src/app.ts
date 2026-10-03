@@ -6,6 +6,7 @@ import { authenticate, requireScope, type Actor, type Scope } from "./auth.ts";
 import { migrationNames, pendingMigrations, schemaVersion, type DB } from "./db.ts";
 import { ApiError, invalid, type FieldError } from "./errors.ts";
 import { registerMcpRoute } from "./mcp-http.ts";
+import { shouldReport, statusFor } from "./error-status.ts";
 import { withIdempotency, type TestHooks, type WriteResult } from "./idempotency.ts";
 import { API_TAGS, documentRoute } from "./openapi.ts";
 import { consume, DEFAULT_LIMITS, ipHash, type LimitConfig } from "./limits.ts";
@@ -203,13 +204,13 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     if (code === "FST_ERR_CTP_INVALID_MEDIA_TYPE") {
       return sendError(reply, req, new ApiError(415, "unsupported_media_type", "send application/json"));
     }
-    const status = typeof err["statusCode"] === "number" ? (err["statusCode"] as number) : 500;
+    const status = statusFor(err);
     if (status >= 400 && status < 500) {
       return sendError(reply, req, new ApiError(status, "bad_request", "malformed request"));
     }
     // Internal details go to the log and Sentry (when configured), never to the client.
     req.log.error({ err }, "unhandled error");
-    Sentry.captureException(err, { tags: { request_id: req.id } });
+    if (shouldReport(err)) Sentry.captureException(err, { tags: { request_id: req.id } });
     return sendError(reply, req, new ApiError(500, "internal_error", "internal error"));
   });
 

@@ -773,3 +773,25 @@ would have sent a false spend alert, because my launch figure forgot the nightly
   - The registry is in preview; it may reset.
 - **Not done:** an npm package (no npm login on the box; the hosted URL makes it optional).
   Announcements are drafts for Randall; nothing is posted under his name.
+
+## v0.1.8: protocol 2026-07-28 and Sentry noise (2026-10-03)
+
+- **Protocol (PROJECTNOOSPHERE-5).** Clients on protocol 2026-07-28 got "Unsupported
+  protocol version": 7 distinct clients by 2026-10-03. Reproduced before fixing: a pinned v2
+  client failed negotiation (`ERA_NEGOTIATION_FAILED`); a raw POST with that version got a 400.
+  - Fix: MCP SDK v2. `createMcpHandler` + `toNodeHandler` for `/mcp`, `serveStdio` for
+    `mcp/server.ts`. The caller's token and address ride in `authInfo`, which reaches the
+    per-request server factory in both eras; the factory refuses to run without an address,
+    so rate limits can never fall back to one shared bucket.
+  - The SDK answers GET/DELETE with 405 but no `Allow` header; the route adds it.
+  - Tests: every `/mcp` case now runs in both eras (14/14). A new case pins the tool schemas
+    (required fields, `minLength`, `readOnlyHint`, the six record kinds), so the
+    `z.object` migration cannot silently loosen them.
+- **Sentry noise (PROJECTNOOSPHERE-2/3/4).** Validation errors and rejected tokens were
+  reported as errors, because Sentry's Fastify hook reads the reply status before our
+  handler sets it. Fix: `src/error-status.ts` decides once, for both `app.ts` and
+  `instrument.ts`. MCP client mistakes are dropped; protocol gaps are kept as warnings.
+  - Mutations, all caught: report 4xx; validation not mapped to 400; protocol gap dropped;
+    "Invalid params" kept.
+- **Packaging:** `@modelcontextprotocol/client` and the v1 `sdk` are devDependencies (tests
+  only). `npm audit --omit=dev`: 0. `server.json` is 0.1.8.

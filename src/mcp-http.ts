@@ -1,10 +1,14 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest, InjectOptions } from "fastify";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { FastifyInstance, InjectOptions } from "fastify";
+import * as Sentry from "@sentry/node";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import { buildNoosphereMcp } from "../mcp/server.ts";
 
-// The hosted MCP endpoint: POST /mcp serves the same six tools as
-// mcp/server.ts to clients that connect by URL. Stateless (no sessions):
-// every POST builds a fresh server and transport.
+// The hosted MCP endpoint: /mcp serves the same six tools as mcp/server.ts to
+// clients that connect by URL. createMcpHandler (SDK v2) speaks protocol
+// revision 2026-07-28 AND falls back to stateless 2025-era serving, per
+// request. On SDK v1 every 2026-07-28 client got "Unsupported protocol
+// version" (Sentry PROJECTNOOSPHERE-5, 7 clients on the first night listed).
 //
 // The tools' API calls are served IN-PROCESS with inject(), never over the
 // network, so the server still makes no outbound requests (AGENTS.md), and
@@ -48,38 +52,48 @@ export function inProcessFetch(inject: Inject, clientIp: string): typeof fetch {
   }) as typeof fetch;
 }
 
-export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: string; inject: Inject }): void {
-  const notAllowed = async (_req: FastifyRequest, reply: FastifyReply) =>
-    reply
-      .code(405)
-      .header("allow", "POST")
-      .send({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed: this endpoint is stateless; POST JSON-RPC to it." }, id: null });
-  app.get("/mcp", notAllowed);
-  app.delete("/mcp", notAllowed);
+// What each request's server needs to know about its caller. It rides in the
+// SDK's authInfo, which reaches the factory untouched on both protocol eras.
+type Caller = { token: string; clientIp: string } & Record<string, unknown>;
 
-  app.post("/mcp", { bodyLimit: MCP_BODY_LIMIT }, async (req, reply) => {
-    const auth = req.headers.authorization;
-    const token = typeof auth === "string" && /^Bearer\s+\S+$/i.test(auth) ? auth.replace(/^Bearer\s+/i, "") : undefined;
-    const server = buildNoosphereMcp({ base: opts.publicOrigin, token, fetch: inProcessFetch(opts.inject, req.ip) });
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    // The transport writes the response itself; Fastify's error handler no
-    // longer runs after hijack, so errors are answered here.
-    reply.hijack();
-    reply.raw.on("close", () => {
-      void transport.close();
-      void server.close();
+export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: string; inject: Inject }): void {
+  const handler = createMcpHandler(({ authInfo }) => {
+    const caller = authInfo?.extra as Partial<Caller> | undefined;
+    // Never fall back to a default address: rate limits would silently treat
+    // every client as one.
+    if (!caller?.clientIp) throw new Error("mcp: caller address missing from authInfo");
+    return buildNoosphereMcp({
+      base: opts.publicOrigin,
+      token: caller.token || undefined,
+      fetch: inProcessFetch(opts.inject, caller.clientIp),
     });
+  });
+  const node = toNodeHandler(handler);
+
+  // GET and DELETE go to the SDK too: it answers them for each protocol era.
+  app.route({ method: ["GET", "POST", "DELETE"], url: "/mcp", bodyLimit: MCP_BODY_LIMIT, handler: async (req, reply) => {
+    const auth = req.headers.authorization;
+    const token = typeof auth === "string" && /^Bearer\s+\S+$/i.test(auth) ? auth.replace(/^Bearer\s+/i, "") : "";
+    const caller: Caller = { token, clientIp: req.ip };
+    // The SDK writes the response itself; Fastify's error handler no longer
+    // runs after hijack, so errors are answered here.
+    reply.hijack();
     try {
       reply.raw.setHeader("x-robots-tag", "noindex");
       reply.raw.setHeader("cache-control", "no-store");
-      await server.connect(transport);
-      await transport.handleRequest(req.raw, reply.raw, req.body);
+      // The SDK answers GET and DELETE on this stateless endpoint with 405 but
+      // no Allow header, which HTTP requires on a 405.
+      if (req.method !== "POST") reply.raw.setHeader("allow", "POST");
+      const raw = Object.assign(req.raw, { auth: { token, clientId: "noosphere-mcp", scopes: [], extra: caller } });
+      await node(raw, reply.raw, req.body);
     } catch (err) {
       req.log.error({ err }, "mcp request failed");
+      // Hijacked: neither the app's error handler nor Sentry's Fastify hook sees this.
+      Sentry.captureException(err, { tags: { request_id: req.id } });
       if (!reply.raw.headersSent) {
         reply.raw.writeHead(500, { "content-type": "application/json" });
         reply.raw.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32603, message: "Internal error" }, id: null }));
       }
     }
-  });
+  } });
 }
