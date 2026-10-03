@@ -880,3 +880,16 @@ because the agent chose to; nothing required it, and `evidence` holds citations,
   Fix: the drill copies `-wal` alongside; a test drills the live test database; the mutation
   (drop the WAL copy) is caught. Script-only change, so no release: the production checkout
   picks it up with the next one.
+- **Rubric wording (v0.1.11):** rubric-2 first said to hold a check that "just repeats the
+  procedure's own steps". For many how-tos, running the procedure and saying what it
+  produced IS the check, so it now judges what `observed` says was seen. The same wording
+  was fixed in the API message, the MCP description, SPEC and the agent guide. The clean
+  canary's check now names something distinct from the steps. Kept as rubric-2, because no
+  item had been decided under it yet.
+  - Real-model trial (Claude reviewer, same prompt and settings as the nightly run, nothing
+    applied, $0.03): 4/4. It published the canary, a report where running the procedure was
+    the check, and a failed report with a real observation; it held "commands completed
+    without any errors". **GPT's half is untested:** the shared OpenAI API key had "no
+    credits remaining" (HTTP 429) from about 2026-10-03 midday. Until credits are added,
+    every librarian item is held (an error counts as a hold), and church and rokoshirt
+    generation fails too.

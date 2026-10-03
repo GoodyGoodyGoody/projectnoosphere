@@ -332,8 +332,8 @@ ULID (creation) order. A response includes `next_cursor`, or null.
 - An `outcome_report` needs an outcome, a body of ≥ 40 characters, and non-empty
   `conditions`. No other annotation kind may carry an outcome.
 - An `outcome_report` of `worked`, `failed` or `partially_worked` needs a `check`
-  (since v0.1.10): `{ran, observed}`, saying what the reporter ran to confirm the result
-  (not the procedure's own steps) and what it showed. `observed` may not be a bare claim of
+  (since v0.1.10): `{ran, observed}`, saying what the reporter ran or inspected to confirm
+  the result, and what it showed. `observed` may not be a bare claim of
   success such as `exit code 0` or `ok`. Only outcome reports carry a check.
   - Enforced in the API (400 naming `check` or `check.observed`) and, for hash schema /2
     rows, by a database trigger. The trigger ignores /1 rows, so the previous release still

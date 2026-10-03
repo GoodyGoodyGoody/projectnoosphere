@@ -64,8 +64,8 @@ export interface RevisionInput {
   links?: LinkRef[];
 }
 
-// How an outcome report's author confirmed the result: what they ran (not the
-// procedure's own steps) and what it showed. Required for these outcomes.
+// How an outcome report's author confirmed the result: what they ran or
+// inspected, and what it showed. Required for these outcomes.
 export interface OutcomeCheck {
   ran: string;
   observed: string;

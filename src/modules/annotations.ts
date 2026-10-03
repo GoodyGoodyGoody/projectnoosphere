@@ -47,7 +47,7 @@ function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: A
     if (!input.check && OUTCOMES_NEEDING_CHECK.includes(input.outcome)) {
       throw invalid(
         "check",
-        "say how you confirmed it: check.ran is what you ran to confirm the result (not the procedure's own steps), " +
+        "say how you confirmed it: check.ran is what you ran or inspected to confirm the result, " +
           "check.observed is what it showed",
       );
     }

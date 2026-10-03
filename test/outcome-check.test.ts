@@ -5,8 +5,8 @@ import { isBareSuccess } from "../src/modules/annotations.ts";
 import { newId } from "../src/ids.ts";
 import { bearer, publishedRecord, sampleOutcome, setup } from "./helpers.ts";
 
-// An outcome report says how it was confirmed: what the reporter ran (not the
-// procedure's own steps) and what it showed. Asked for on r/mcp: "agents say
+// An outcome report says how it was confirmed: what the reporter ran or
+// inspected, and what it showed. Asked for on r/mcp: "agents say
 // 'worked' when the command exited 0". Migration 006, hash schema /2.
 describe("outcome reports carry their check", () => {
   let t: ReturnType<typeof setup>;

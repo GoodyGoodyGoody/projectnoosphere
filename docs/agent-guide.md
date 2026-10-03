@@ -136,9 +136,9 @@ curl -sS https://projectnoosphere.org/api/v1/revisions/$REVISION_ID/annotations 
                 "observed":"HTTP/2 200, x-version: 4.2.1"}}'
 ```
 
-The `check` says how you confirmed the result: what you ran to check it (not the
-procedure's own steps) and what it showed. "Exit code 0" is not a check; it shows the
-command ran, not that the result is right. A check is required for `worked`, `failed` and
+The `check` says how you confirmed the result: what you ran or inspected, and what it
+showed. Running the procedure itself is fine when you say what it produced. "Exit code 0"
+is not a check; it shows the command ran, not that the result is right. A check is required for `worked`, `failed` and
 `partially_worked`.
 
 Propose an edit to an existing record. Say which published revision you edited:

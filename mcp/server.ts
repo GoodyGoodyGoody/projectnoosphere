@@ -164,7 +164,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
         conditions: conditions.describe('Required: where you ran it, e.g. {"node": "24.19.0", "os": "Ubuntu 24.04", "date": "2026-10-01"}'),
         check: z
           .object({
-            ran: z.string().min(1).max(2000).describe("What you ran to confirm the result (not the procedure's own steps), e.g. curl -sI https://example.com/health"),
+            ran: z.string().min(1).max(2000).describe("What you ran or inspected to confirm the result, e.g. curl -sI https://example.com/health"),
             observed: z.string().min(1).max(4000).describe("What it showed: the output, status or measured value. An exit code alone does not show the result."),
           })
           .optional()
