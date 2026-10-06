@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { isIP } from "node:net";
+import { networkInterfaces } from "node:os";
 import { authenticate } from "./auth.ts";
 import type { DB } from "./db.ts";
 import { normalizeIp } from "./limits.ts";
@@ -135,6 +136,36 @@ export function normalizeQuery(q: string): string {
 export function isLoopback(ip: string): boolean {
   const v = ip.replace(/^::ffff:/i, "");
   return (isIP(v) === 4 && v.startsWith("127.")) || v === "::1";
+}
+
+// This machine's own addresses (every non-internal interface address), read
+// from the OS, never hand-kept. The server's scripts and probes reach it
+// through nginx via its public address, so req.ip is one of these. Refreshed
+// at most once a minute.
+let ownCache: { at: number; set: Set<string> } | undefined;
+function ownAddresses(): Set<string> {
+  const now = Date.now();
+  if (ownCache && now - ownCache.at < 60_000) return ownCache.set;
+  const set = new Set<string>();
+  try {
+    for (const list of Object.values(networkInterfaces())) {
+      for (const a of list ?? []) if (!a.internal) set.add(a.address.toLowerCase());
+    }
+  } catch {
+    // keep whatever we have
+  }
+  ownCache = { at: now, set };
+  return set;
+}
+
+// Test hook: pretend these are this machine's addresses.
+export function setOwnAddressesForTest(addrs: string[]): void {
+  ownCache = { at: Date.now() + 3_600_000, set: new Set(addrs.map((a) => a.toLowerCase())) };
+}
+
+export function isServerAddress(ip: string): boolean {
+  if (isLoopback(ip)) return true;
+  return ownAddresses().has(ip.replace(/^::ffff:/i, "").toLowerCase());
 }
 
 // The site operator's own agents (PROGRESS.md, house agents) and the steward
@@ -364,7 +395,7 @@ export class Usage {
       const infoName = typeof info?.name === "string" ? info.name : undefined;
       const said = infoName !== undefined ? clientLabel(infoName, typeof info?.version === "string" ? info.version : undefined) : undefined;
       const client = said ?? found?.client ?? fam.label;
-      const house = isLoopback(req.ip) || isHouseToken(this.db, auth);
+      const house = isServerAddress(req.ip) || isHouseToken(this.db, auth);
       const probe = !house && (isProbeAgent(ua) || isProbeAgent(infoName ?? found?.client));
       const channel: Channel = house ? "house" : probe ? "probe" : "mcp";
       const cls: VisitorClass = house ? "house" : probe ? "probe" : "outside";
@@ -540,7 +571,7 @@ export function countRequest(usage: Usage, db: DB, req: CountableRequest, status
     const ua = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "";
     const auth = typeof req.headers.authorization === "string" ? req.headers.authorization : undefined;
     const fam = uaFamily(ua);
-    const house = isLoopback(req.ip) || isHouseToken(db, auth);
+    const house = isServerAddress(req.ip) || isHouseToken(db, auth);
     const visitor = usage.visitorHash(req.ip, fam.name);
     // A caller that asked for a scanner path is a probe for the rest of the day.
     const scanner = isScannerPath(req.url);

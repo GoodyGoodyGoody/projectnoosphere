@@ -6,7 +6,7 @@ import { StreamableHTTPClientTransport as LegacyTransport } from "@modelcontextp
 import { Client as ModernClient, StreamableHTTPClientTransport as ModernTransport } from "@modelcontextprotocol/client";
 import { openDb, type DB } from "../src/db.ts";
 import { createContributor } from "../src/modules/contributors.ts";
-import { clientLabel, isProbeAgent, normalizeQuery, uaFamily, Usage, WITHHELD } from "../src/usage.ts";
+import { clientLabel, isProbeAgent, normalizeQuery, setOwnAddressesForTest, uaFamily, Usage, WITHHELD } from "../src/usage.ts";
 import { formatUsageReport, usageReport } from "../src/usage-report.ts";
 import { main as usageCli } from "../scripts/usage.ts";
 import { bearer, createRecordAs, publish, sampleRecord, setup } from "./helpers.ts";
@@ -155,6 +155,23 @@ describe("usage counts through the real routes", () => {
     assert.equal(report.by_class[0]!.house, 3);
     assert.equal(report.by_class[0]!.outside, 1);
     assert.equal(report.top_searches[0]!.searches, 1, "house searches leaked into the outside top searches");
+  });
+
+  test("a request from one of this machine's own addresses counts as house; a public one stays outside", async () => {
+    const own = "203.0.113.9";
+    setOwnAddressesForTest([own]);
+    fresh();
+    const a = await t.app.inject({ url: "/api/v1/search?q=quokka", remoteAddress: own, headers: { "user-agent": "node" } });
+    const b = await t.app.inject({ url: "/api/v1/search?q=quokka", remoteAddress: IP, headers: { "user-agent": UA } });
+    assert.equal(a.statusCode, 200);
+    assert.equal(b.statusCode, 200);
+    await settle();
+    t.app.usage.flush();
+    assert.equal(countOf(t.db, { channel: "house", tool: "search" }), 1);
+    assert.equal(countOf(t.db, { channel: "web" }), 1);
+    const report = usageReport(t.db, { days: 1 });
+    assert.equal(report.by_class[0]!.house, 1);
+    assert.equal(report.by_class[0]!.outside, 1);
   });
 
   test("a probe user agent counts under probe", async () => {
