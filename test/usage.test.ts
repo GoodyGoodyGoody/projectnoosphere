@@ -460,3 +460,64 @@ describe("npm run usage", () => {
     assert.match(usageCli([], bare).out, /migration 007/);
   });
 });
+
+describe("usage measures use, not traffic", () => {
+  let t: ReturnType<typeof setup>;
+  const CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+  const CHATGPT = "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot";
+  const WP = "http://projectnoosphere.org/wp-admin/install.php?step=1";
+  before(() => { t = setup({ trustProxy: "127.0.0.1", usage: { flushMs: 0 } }); });
+  after(() => t.close());
+  const get = async (url: string, ip: string, ua: string) => {
+    await t.app.inject({ url, remoteAddress: ip, headers: { "user-agent": ua, "x-forwarded-for": ip } });
+    await settle();
+  };
+  const reset = () => { t.app.usage.flush(); t.db.exec("DELETE FROM usage_counts; DELETE FROM usage_searches; DELETE FROM usage_visitors"); };
+
+  test("health checks are not counted at all, and make no visitor", async () => {
+    reset();
+    await get("/readyz", "198.51.100.5", "curl/8.6.0");
+    await get("/healthz", "198.51.100.5", "curl/8.6.0");
+    t.app.usage.flush();
+    assert.equal(countOf(t.db, {}), 0);
+    assert.equal(rows(t.db, "SELECT * FROM usage_visitors").length, 0);
+  });
+
+  test("a page-only caller is one separate number, not a returning user", async () => {
+    reset();
+    await get("/", "198.51.100.6", "curl/8.6.0");
+    await get("/", "198.51.100.6", "curl/8.6.0");
+    await get("/api/v1/search?q=quokka", "198.51.100.7", CHROME);
+    t.app.usage.flush();
+    assert.deepEqual(rows(t.db, "SELECT class FROM usage_visitors ORDER BY class"), [{ class: "outside" }, { class: "page" }]);
+    const v = usageReport(t.db, { days: 1 }).visitors;
+    assert.equal(v.page_only, 1);
+    assert.equal(v.by_day[0]!.outside, 1);
+  });
+
+  test("scanners are probes: URL, '-' or empty user agent, and well-known scanner paths", async () => {
+    reset();
+    await get("/api/v1/search?q=quokka", "198.51.100.8", WP);
+    await get("/api/v1/search?q=quokka", "198.51.100.9", "-");
+    await get("/api/v1/search?q=quokka", "198.51.100.10", "");
+    // A browser-looking caller that asks for a scanner path is a probe for the day.
+    await get("/wp-login.php", "198.51.100.11", CHROME);
+    await get("/api/v1/search?q=quokka", "198.51.100.11", CHROME);
+    // A person's fetch and a plain browser stay outside.
+    await get("/api/v1/search?q=quokka", "198.51.100.12", CHATGPT);
+    await get("/api/v1/search?q=quokka", "198.51.100.13", CHROME);
+    t.app.usage.flush();
+    assert.equal(countOf(t.db, { channel: "web", tool: "search" }), 2);
+    assert.equal(countOf(t.db, { channel: "probe", tool: "search" }), 4);
+    assert.equal(countOf(t.db, { channel: "probe", tool: "other" }), 1);
+    assert.equal(rows(t.db, "SELECT * FROM usage_visitors WHERE class = 'outside'").length, 2);
+    assertNothingIdentifying(t.db, ["198.51.100", "wp-admin", "AppleWebKit"]);
+  });
+
+  test("a credential written as name=value is withheld", () => {
+    assert.equal(normalizeQuery("password=hunter2 not working"), WITHHELD);
+    assert.equal(normalizeQuery("api_key: abc123"), WITHHELD);
+    assert.equal(normalizeQuery("Authorization: x"), WITHHELD);
+    assert.notEqual(normalizeQuery("how to reset a password in sqlite"), WITHHELD);
+  });
+});

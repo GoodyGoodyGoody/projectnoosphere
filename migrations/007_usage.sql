@@ -38,7 +38,7 @@ CREATE INDEX usage_searches_day ON usage_searches(day);
 -- days_mask: bit d set = seen on day d+1 of the month.
 CREATE TABLE usage_visitors (
   month      TEXT NOT NULL,        -- YYYY-MM
-  class      TEXT NOT NULL CHECK (class IN ('outside', 'house', 'probe')),
+  class      TEXT NOT NULL CHECK (class IN ('outside', 'house', 'probe', 'page')),
   hash       TEXT NOT NULL,
   first_day  TEXT NOT NULL,
   days_mask  INTEGER NOT NULL,

@@ -21,6 +21,8 @@ export interface UsageReport {
     by_day: { day: string; outside: number; probe: number; house: number }[];
     by_week: { week_start: string; outside: number; probe: number; house: number }[];
     returning: { outside: number; probe: number; house: number };
+    // Outside callers that only read pages, never used a tool (not "users").
+    page_only: number;
   };
 }
 
@@ -89,24 +91,33 @@ export function usageReport(db: DB, opts: { days?: number; now?: number } = {}):
   // Only the current month's hashes exist (the key changes monthly).
   const visitorRows = db
     .prepare("SELECT month, class, days_mask FROM usage_visitors WHERE month BETWEEN ? AND ?")
-    .all(from.slice(0, 7), to.slice(0, 7)) as { month: string; class: Cls; days_mask: number }[];
+    .all(from.slice(0, 7), to.slice(0, 7)) as { month: string; class: Cls | "page"; days_mask: number }[];
+  // Callers that only read pages and never used a tool: one separate number.
+  const pageOnly = (db
+    .prepare(
+      `SELECT count(*) FROM usage_visitors p WHERE p.class = 'page' AND p.month BETWEEN ? AND ?
+         AND NOT EXISTS (SELECT 1 FROM usage_visitors o WHERE o.month = p.month AND o.hash = p.hash AND o.class != 'page')`,
+    )
+    .pluck()
+    .get(from.slice(0, 7), to.slice(0, 7)) as number);
+  const toolVisitors = visitorRows.filter((r): r is typeof r & { class: Cls } => r.class !== "page");
   const seenOn = (r: { month: string; days_mask: number }, day: string) =>
     r.month === day.slice(0, 7) && (r.days_mask & (1 << (Number(day.slice(8, 10)) - 1))) !== 0;
   const visitorsByDay = days.map((day) => {
     const row = { day, outside: 0, probe: 0, house: 0 };
-    for (const r of visitorRows) if (seenOn(r, day)) row[r.class] += 1;
+    for (const r of toolVisitors) if (seenOn(r, day)) row[r.class] += 1;
     return row;
   });
   const weeks: { week_start: string; outside: number; probe: number; house: number }[] = [];
   for (let i = 0; i < days.length; i += 7) {
     const span = days.slice(i, i + 7);
     const row = { week_start: span[0]!, outside: 0, probe: 0, house: 0 };
-    for (const r of visitorRows) if (span.some((d) => seenOn(r, d))) row[r.class] += 1;
+    for (const r of toolVisitors) if (span.some((d) => seenOn(r, d))) row[r.class] += 1;
     weeks.push(row);
   }
   const returning = { outside: 0, probe: 0, house: 0 };
   const popcount = (x: number) => { let c = 0; for (; x; x &= x - 1) c++; return c; };
-  for (const r of visitorRows) if (r.month === to.slice(0, 7) && popcount(r.days_mask) >= 2) returning[r.class] += 1;
+  for (const r of toolVisitors) if (r.month === to.slice(0, 7) && popcount(r.days_mask) >= 2) returning[r.class] += 1;
 
   return {
     days,
@@ -125,6 +136,7 @@ export function usageReport(db: DB, opts: { days?: number; now?: number } = {}):
       by_day: visitorsByDay,
       by_week: weeks,
       returning,
+      page_only: pageOnly,
     },
   };
 }
@@ -163,7 +175,7 @@ export function formatUsageReport(r: UsageReport): string {
     r.zero_result_searches.map((s) => `  ${String(s.searches).padStart(5)}  ${JSON.stringify(s.query)}  (last ${s.last_day})`),
   );
   const v = r.visitors;
-  const anyVisitor = v.by_day.some((d) => d.outside + d.probe + d.house > 0);
+  const anyVisitor = v.by_day.some((d) => d.outside + d.probe + d.house > 0) || v.page_only > 0;
   section(
     "Visitors (distinct, by monthly-keyed hash)",
     anyVisitor
@@ -172,6 +184,7 @@ export function formatUsageReport(r: UsageReport): string {
         ...v.by_day.map((d) => `  ${d.day}  ${String(d.outside).padStart(7)} ${String(d.probe).padStart(7)} ${String(d.house).padStart(7)}`),
         ...v.by_week.map((w) => `  week of ${w.week_start}: outside ${w.outside}, probe ${w.probe}, house ${w.house}`),
         `  came back on 2+ days this month: outside ${v.returning.outside}, probe ${v.returning.probe}, house ${v.returning.house}`,
+        `  page-only callers (read pages, used no tool; not counted above): ${v.page_only}`,
         `  ${v.note}`,
       ]
       : [],

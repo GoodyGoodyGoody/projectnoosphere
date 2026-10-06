@@ -17,7 +17,9 @@ import { normalizeIp } from "./limits.ts";
 //   once and swallowed. Memory is bounded everywhere.
 
 export type Channel = "mcp" | "web" | "house" | "probe";
-export type VisitorClass = "outside" | "house" | "probe";
+// "page" = an outside caller that only read pages (never used a tool): one
+// separate number, never counted as a returning user.
+export type VisitorClass = "outside" | "house" | "probe" | "page";
 export type Tool =
   | "search" | "get_record" | "get_revision" | "list" | "create_record" | "propose_revision"
   | "report_outcome" | "annotate" | "register" | "connect" | "other";
@@ -63,6 +65,18 @@ export function isProbeAgent(s: string | undefined): boolean {
   return PROBE_WORD.test(s) || /\+https?:/i.test(s);
 }
 
+// Scanners, by rule: no user agent, "-", or a URL as the user agent.
+export function isScannerAgent(ua: string | undefined): boolean {
+  const s = (ua ?? "").trim();
+  return s === "" || s === "-" || /^https?:\/\//i.test(s);
+}
+
+// Well-known scanner targets (the site has no PHP at all).
+const SCANNER_PATH = /wp-admin|wp-login|wp-content|wp-includes|xmlrpc\.php|\/\.env|\/\.git(?:\/|$)|phpmyadmin|cgi-bin|\/vendor\/phpunit|\.php(?:$|[/?#])/i;
+export function isScannerPath(url: string | undefined): boolean {
+  return !!url && SCANNER_PATH.test(url);
+}
+
 interface Family { name: string; label: string }
 
 // The user agent's family, e.g. "curl/8", "chrome/141", "chatgpt-user/1".
@@ -97,6 +111,8 @@ const SECRET_PATTERNS: RegExp[] = [
   /-----BEGIN/i,
   /\bbearer\s+\S{12,}/i,
   /[0-9a-f]{24,}/i, // a long hex run
+  // A credential written as name=value or name: value.
+  /(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|auth\w*)\s*[=:]\s*\S+/i,
 ];
 function looksSecret(q: string): boolean {
   if (SECRET_PATTERNS.some((re) => re.test(q))) return true;
@@ -178,6 +194,8 @@ export class Usage {
   // hash of address + user agent, for 30 minutes.
   readonly callers = new Map<string, McpCaller>();
   readonly inner = new Map<string, InnerCall>();
+  // Visitor hashes that asked for a scanner path today (memory only, bounded).
+  private scanners = { day: "", hashes: new Set<string>() };
 
   private readonly db: DB;
 
@@ -241,6 +259,16 @@ export class Usage {
     const key = this.monthKey(month);
     const hash = createHmac("sha256", key).update(`${normalizeIp(ip)}\n${family}`).digest("hex").slice(0, 32);
     return { month, hash, day: isoDay(nowMs) };
+  }
+
+  markScanner(hash: string): void {
+    const day = this.today();
+    if (this.scanners.day !== day) this.scanners = { day, hashes: new Set() };
+    if (this.scanners.hashes.size < this.callerCap) this.scanners.hashes.add(hash);
+  }
+
+  isScanner(hash: string): boolean {
+    return this.scanners.day === this.today() && this.scanners.hashes.has(hash);
   }
 
   visit(cls: VisitorClass, v: { month: string; hash: string; day: string } | null): void {
@@ -487,6 +515,7 @@ interface CountableRequest {
   headers: Record<string, string | string[] | undefined>;
   query: unknown;
   body: unknown;
+  url?: string;
   routeOptions: { url?: string };
   usageSearch: { q: string; results: number } | null;
 }
@@ -512,10 +541,18 @@ export function countRequest(usage: Usage, db: DB, req: CountableRequest, status
     const auth = typeof req.headers.authorization === "string" ? req.headers.authorization : undefined;
     const fam = uaFamily(ua);
     const house = isLoopback(req.ip) || isHouseToken(db, auth);
-    const channel: Channel = house ? "house" : isProbeAgent(ua) ? "probe" : "web";
+    const visitor = usage.visitorHash(req.ip, fam.name);
+    // A caller that asked for a scanner path is a probe for the rest of the day.
+    const scanner = isScannerPath(req.url);
+    if (scanner && !house && visitor) usage.markScanner(visitor.hash);
+    const probe = !house && (isProbeAgent(ua) || isScannerAgent(ua) || scanner || (!!visitor && usage.isScanner(visitor.hash)));
+    const channel: Channel = house ? "house" : probe ? "probe" : "web";
     usage.count(tool, channel, fam.label, status);
     if (req.usageSearch) usage.search(channel, fam.label, req.usageSearch.q, req.usageSearch.results);
-    usage.visit(channel === "web" ? "outside" : channel, usage.visitorHash(req.ip, fam.name));
+    // Only a request that used a tool makes a visitor; outside page reads are
+    // one separate number.
+    if (tool !== "other") usage.visit(channel === "web" ? "outside" : channel, visitor);
+    else if (channel === "web") usage.visit("page", visitor);
   } catch (err) {
     usage.warn(err);
   }
