@@ -21,3 +21,16 @@ test("MCP transport errors: client mistakes dropped, protocol gaps kept as warni
   assert.equal(triageMcpError("Rejected inbound request (modern-header-without-claim): Invalid params: the MCP-Protocol-Version header names protocol revision 2026-07-28, but the request is missing the required per-request envelope key(s): _meta"), "drop");
   assert.equal(triageMcpError("Unsupported protocol version: 2099-01-01"), "warn");
 });
+
+test("scanner junk is dropped; a real newer version and internal errors still reach Sentry", () => {
+  // PROJECTNOOSPHERE-5: bogus version.
+  assert.equal(triageMcpError("ProtocolError: Unsupported protocol version: 1999-01-01"), "drop");
+  assert.equal(triageMcpError("Unsupported protocol version: banana"), "drop");
+  // Real-looking newer versions are the upgrade signal.
+  assert.equal(triageMcpError("Unsupported protocol version: 2027-03-01"), "warn");
+  // PROJECTNOOSPHERE-6: params-less initialize, zod issues as the SDK answers them.
+  const zod = JSON.stringify([{ expected: "string", code: "invalid_type", path: ["params", "protocolVersion"], message: "Invalid input: expected string, received undefined" }], null, 2);
+  assert.equal(triageMcpError(zod), "drop");
+  assert.equal(triageMcpError("SqliteError: database is locked"), "keep");
+  assert.equal(triageMcpError("mcp: caller address missing from authInfo"), "keep");
+});
