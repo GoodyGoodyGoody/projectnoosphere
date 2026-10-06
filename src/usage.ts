@@ -337,19 +337,18 @@ export class Usage {
       const said = infoName !== undefined ? clientLabel(infoName, typeof info?.version === "string" ? info.version : undefined) : undefined;
       const client = said ?? found?.client ?? fam.label;
       const house = isLoopback(req.ip) || isHouseToken(this.db, auth);
-      const probe = !house && (isProbeAgent(ua) || isProbeAgent(infoName));
+      const probe = !house && (isProbeAgent(ua) || isProbeAgent(infoName ?? found?.client));
       const channel: Channel = house ? "house" : probe ? "probe" : "mcp";
       const cls: VisitorClass = house ? "house" : probe ? "probe" : "outside";
       const visitor = this.visitorHash(req.ip, fam.name);
       const day = this.today();
-      const entry: McpCaller | undefined = channel === "mcp"
-        ? found ?? { lastSeen: 0, real: false, pending: new Map(), visitor }
-        : undefined;
-      if (entry) {
-        if (said) entry.client = said;
-        entry.visitor = visitor;
-        this.touchCaller(key, entry);
-      }
+      // Every caller's name is remembered; only outside callers' handshakes wait
+      // to learn whether they are real use or a probe.
+      const remembered: McpCaller = found ?? { lastSeen: 0, real: false, pending: new Map(), visitor };
+      if (said) remembered.client = said;
+      remembered.visitor = visitor;
+      this.touchCaller(key, remembered);
+      const entry = channel === "mcp" ? remembered : undefined;
       const nonce = toolName ? randomBytes(16).toString("hex") : null;
       const call: InnerCall = { channel, client, counted: false };
       if (nonce) this.inner.set(nonce, call);
@@ -411,6 +410,9 @@ export class Usage {
       for (const [k, v] of this.visits) visits.set(k, v);
       this.counts = new Map();
       this.visits = new Map();
+      const sweepDue = nowMs - this.lastSweep >= 3600_000;
+      // Idle: no write lock taken at all.
+      if (!counts.size && !searches.size && !visits.size && !sweepDue) return;
       const month = isoMonth(nowMs);
       this.monthKey(month);
       this.db.transaction(() => {
@@ -445,7 +447,7 @@ export class Usage {
           const [m, cls, hash] = k.split("|");
           if (m === month) addVisit.run(m, cls, hash, v.firstDay, v.mask);
         }
-        if (nowMs - this.lastSweep >= 3600_000) this.sweep(nowMs);
+        if (sweepDue) this.sweep(nowMs);
       }).immediate();
       this.failing = false;
     } catch (err) {

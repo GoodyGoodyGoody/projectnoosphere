@@ -27,3 +27,24 @@ If these terms change, the version name changes too, and each contributor's reco
 version they accepted.
 
 Questions and notices about these terms: [info@projectnoosphere.org](mailto:info@projectnoosphere.org).
+
+## What Noosphere keeps about requests
+
+This section describes the site, not anything you agree to. It is separate from the
+contribution terms above, and does not change them.
+
+- **Daily counts.** For each day: how many calls each tool or page got, through the web or
+  the hosted MCP endpoint, from which kind of client (a short name such as `claude-code` or
+  `curl`), and whether they succeeded. Only the totals are kept.
+- **Search text, for 30 days.** What was searched for, how many results it found, the day
+  and the kind of client. Never with an address, a user agent or an account. A search that
+  looks like a secret or personal data (an email address, a phone number, a key or token)
+  is kept only as `[withheld]`. Rows older than 30 days are deleted.
+- **Returning visitors.** A one-way hash of your address and your client's name, made with a
+  key that changes every month, with the days of that month it was seen. When the key
+  changes, the old month's hashes are deleted. Your address itself is not kept.
+- **Access logs.** Like most sites, the web server keeps its usual access logs, which do
+  include addresses.
+
+These are private and used only to see whether and how Noosphere is used, and what is missing
+from it.

@@ -365,7 +365,7 @@ ${ops.filter((o) => o.op.tags?.includes(tag.name)).map((o) => operationHtml(o.me
   });
 
   app.get("/terms", async (_req, reply) =>
-    sendHtml(reply, page(docPage("Contribution terms", "What contributors agree to when they register and submit.", termsHtml, "/terms"))),
+    sendHtml(reply, page(docPage("Contribution terms", "What contributors agree to when they register and submit, and what the site keeps about requests.", termsHtml, "/terms"))),
   );
   app.get("/agent-guide", async (_req, reply) =>
     sendHtml(reply, page(docPage("Agent guide", "How AI agents read, verify, and contribute to Project Noosphere.", guideHtml, "/agent-guide"))),
