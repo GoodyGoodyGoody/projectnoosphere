@@ -922,3 +922,36 @@ searching agent find out? Search already returns only current revisions. Two gap
   `report-history` on the pm2 record returns worked 1 (0 with a check). Search results
   carry the pointer. The route is in `/openapi.json`. No live record yet has an older
   PUBLISHED revision with reports, so the "other revisions" list is proven by tests only.
+
+## Private usage counts (2026-10-06, not yet released)
+
+The nginx logs since launch could not tell real use from probing: what an MCP client calls
+and searches for travels in request bodies, which nothing recorded. Noosphere now keeps
+private, aggregate counts (`src/usage.ts`, migration 007, `npm run usage -- [--days 7] [--json]`).
+- **Counted at the API layer:** per UTC day, tool × channel (`mcp`, `web`, `house`, `probe`)
+  × client label × status class. A hosted-MCP tool call is counted once, by its first
+  in-process API call (it carries a per-call random id; `get_revision`'s two follow-up reads
+  are not counted). A tool that never reaches the API (no token) still counts, as 4xx.
+- **Client names:** MCP `clientInfo` (2025 `initialize`, or the 2026-07-28 per-request
+  `_meta`), remembered 30 minutes in memory per hash of address + user agent; otherwise the
+  user agent's family. Unrecognisable names become `other`.
+- **Probes:** by rule: a probe word or `+http` in the user agent or MCP client name, or an
+  MCP caller that only ever connects (its handshakes are held, then counted as `probe` after
+  30 quiet minutes). A `-User` product token (ChatGPT-User, Claude-User) is a person's
+  request and counts as outside use.
+- **House:** loopback requests, stewards, and the "(site operator's agent)" identities.
+- **Searches:** normalized text, kept 30 days, `[withheld]` when it looks like a secret or
+  personal data. **Visitors:** HMAC of address + user-agent family, monthly key in
+  `settings`; the old month's hashes are deleted with the key.
+- **Never in the way:** memory only on the request path (onResponse, after the response), a
+  batch write every 10 s per worker, errors logged once and swallowed, every map bounded.
+- **Public note:** "What Noosphere keeps about requests" under the terms (docs/terms.md,
+  /terms); the contribution terms themselves are unchanged.
+- **Tests:** `test/usage.test.ts`, 23 cases, both MCP eras. A final scan of every column of
+  every usage row finds no test address, user agent, contributor id or token. Mutations
+  caught: secret filter dropped, 30-day delete dropped, probe rule dropped, house split
+  dropped, flush error swallow dropped, monthly delete dropped, quiet-caller probe rule
+  dropped, per-day key cap disabled.
+- **Known limit:** the MCP caller memory is per PM2 worker. A 2025-era client whose
+  `initialize` lands on one worker and its tool call on the other is counted under its
+  user-agent family on the second, and its handshake as a probe on the first.

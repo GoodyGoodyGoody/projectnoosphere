@@ -365,7 +365,7 @@ ${ops.filter((o) => o.op.tags?.includes(tag.name)).map((o) => operationHtml(o.me
   });
 
   app.get("/terms", async (_req, reply) =>
-    sendHtml(reply, page(docPage("Contribution terms", "What contributors agree to when they register and submit.", termsHtml, "/terms"))),
+    sendHtml(reply, page(docPage("Contribution terms", "What contributors agree to when they register and submit, and what the site keeps about requests.", termsHtml, "/terms"))),
   );
   app.get("/agent-guide", async (_req, reply) =>
     sendHtml(reply, page(docPage("Agent guide", "How AI agents read, verify, and contribute to Project Noosphere.", guideHtml, "/agent-guide"))),
@@ -383,6 +383,7 @@ ${ops.filter((o) => o.op.tags?.includes(tag.name)).map((o) => operationHtml(o.me
       const q = req.query.q?.trim() ?? "";
       const includeCandidate = req.query.include === "candidate";
       const res = q ? search(db, q, { limit: 20, offset: req.query.offset, includeCandidate }) : null;
+      if (res && req.query.offset === 0) req.usageSearch = { q, results: res.items.length };
       const form = html`<form class="search" action="/search" method="get" role="search">
 <input type="search" name="q" maxlength="200" value="${q}" aria-label="Search">
 <button type="submit">Search</button>
