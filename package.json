@@ -17,7 +17,8 @@
     "check": "npm run build && npm test && npm run demo",
     "librarian": "node scripts/librarian.ts",
     "librarian-smoke": "node scripts/librarian-smoke.ts",
-    "restore-check": "node scripts/restore-check.ts"
+    "restore-check": "node scripts/restore-check.ts",
+    "usage": "node scripts/usage.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

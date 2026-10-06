@@ -4,6 +4,7 @@ import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { buildNoosphereMcp } from "../mcp/server.ts";
 import { triageMcpError } from "./error-status.ts";
+import { INNER_HEADER, type Usage } from "./usage.ts";
 
 // The hosted MCP endpoint: /mcp serves the same six tools as mcp/server.ts to
 // clients that connect by URL. createMcpHandler (SDK v2) speaks protocol
@@ -29,13 +30,15 @@ const FORWARDED_HEADERS = new Set(["authorization", "content-type", "accept", "u
 
 type Inject = (opts: InjectOptions) => Promise<{ statusCode: number; body: string; headers: Record<string, unknown> }>;
 
-export function inProcessFetch(inject: Inject, clientIp: string): typeof fetch {
+export function inProcessFetch(inject: Inject, clientIp: string, usageNonce?: string | null): typeof fetch {
   return (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
     const headers: Record<string, string> = {};
     new Headers(init.headers).forEach((value, key) => {
       if (FORWARDED_HEADERS.has(key)) headers[key] = value;
     });
+    // Ties the API call to its tool call for the usage counts (src/usage.ts).
+    if (usageNonce) headers[INNER_HEADER] = usageNonce;
     const res = await inject({
       method: (init.method ?? "GET") as InjectOptions["method"],
       url: url.pathname + url.search,
@@ -55,7 +58,7 @@ export function inProcessFetch(inject: Inject, clientIp: string): typeof fetch {
 
 // What each request's server needs to know about its caller. It rides in the
 // SDK's authInfo, which reaches the factory untouched on both protocol eras.
-type Caller = { token: string; clientIp: string } & Record<string, unknown>;
+type Caller = { token: string; clientIp: string; usageNonce: string | null } & Record<string, unknown>;
 
 // Where requests the SDK rejects before any server exists are reported. Sentry's
 // MCP integration hooks McpServer, so it never sees these, and they include the
@@ -65,7 +68,10 @@ const sentryReport: McpReporter = (error, level) => {
   Sentry.captureException(error, { level, tags: { mcp: "rejected_request" } });
 };
 
-export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: string; inject: Inject; report?: McpReporter }): void {
+export function registerMcpRoute(
+  app: FastifyInstance,
+  opts: { publicOrigin: string; inject: Inject; report?: McpReporter; usage?: Usage },
+): void {
   const report = opts.report ?? sentryReport;
   const handler = createMcpHandler(({ authInfo }) => {
     const caller = authInfo?.extra as Partial<Caller> | undefined;
@@ -75,7 +81,7 @@ export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: str
     return buildNoosphereMcp({
       base: opts.publicOrigin,
       token: caller.token || undefined,
-      fetch: inProcessFetch(opts.inject, caller.clientIp),
+      fetch: inProcessFetch(opts.inject, caller.clientIp, caller.usageNonce),
     });
   }, {
     onerror: (error) => {
@@ -89,7 +95,9 @@ export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: str
   app.route({ method: ["GET", "POST", "DELETE"], url: "/mcp", bodyLimit: MCP_BODY_LIMIT, handler: async (req, reply) => {
     const auth = req.headers.authorization;
     const token = typeof auth === "string" && /^Bearer\s+\S+$/i.test(auth) ? auth.replace(/^Bearer\s+/i, "") : "";
-    const caller: Caller = { token, clientIp: req.ip };
+    // Usage counts: who is calling, and which tool (never throws; memory only).
+    const counted = req.method === "POST" ? opts.usage?.mcpBegin(req) : undefined;
+    const caller: Caller = { token, clientIp: req.ip, usageNonce: counted?.nonce ?? null };
     // The SDK writes the response itself; Fastify's error handler no longer
     // runs after hijack, so errors are answered here.
     reply.hijack();
@@ -109,6 +117,8 @@ export function registerMcpRoute(app: FastifyInstance, opts: { publicOrigin: str
         reply.raw.writeHead(500, { "content-type": "application/json" });
         reply.raw.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32603, message: "Internal error" }, id: null }));
       }
+    } finally {
+      counted?.finish(reply.raw.statusCode);
     }
   } });
 }

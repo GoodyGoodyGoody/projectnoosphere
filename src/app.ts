@@ -26,6 +26,7 @@ import { moderate, revokeCredentialAsSteward } from "./modules/moderation.ts";
 import { reviewQueue } from "./modules/review.ts";
 import { gateFeedback } from "./gate.ts";
 import { search } from "./modules/search.ts";
+import { countRequest, Usage, type UsageOptions } from "./usage.ts";
 import {
   createRecord,
   getRecord,
@@ -62,9 +63,12 @@ import {
 declare module "fastify" {
   interface FastifyRequest {
     actor: Actor | null;
+    // Set by the search routes for the usage counts (src/usage.ts).
+    usageSearch: { q: string; results: number } | null;
   }
   interface FastifyInstance {
     routeTable: { method: string; url: string }[];
+    usage: Usage;
   }
 }
 
@@ -95,6 +99,8 @@ export interface AppOptions {
   testHooks?: TestHooks;
   // Where /mcp reports requests the SDK rejects (default: Sentry). Tests observe it.
   mcpReport?: McpReporter;
+  // Private usage counts (src/usage.ts). Tests set the clock and the caps.
+  usage?: UsageOptions;
 }
 
 export const DEFAULT_PUBLIC_ORIGIN = "https://projectnoosphere.org";
@@ -178,6 +184,18 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   );
 
   app.decorateRequest("actor", null);
+  app.decorateRequest("usageSearch", null);
+
+  // Usage counts: memory only on the request path, after the response is sent;
+  // a timer writes them in batches. See src/usage.ts.
+  const usage = new Usage(db, {
+    flushMs: 10_000,
+    log: (msg, err) => app.log.error({ err }, msg),
+    ...opts.usage,
+  });
+  app.decorate("usage", usage);
+  app.addHook("onResponse", async (req, reply) => countRequest(usage, db, req, reply.statusCode));
+  app.addHook("onClose", async () => usage.close());
 
   app.addHook("onSend", async (req, reply) => {
     reply.header("x-request-id", req.id);
@@ -324,7 +342,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.get("/openapi.json", async () => app.swagger());
 
-  registerMcpRoute(app, { publicOrigin, inject: (o) => root.inject(o), report: opts.mcpReport });
+  registerMcpRoute(app, { publicOrigin, inject: (o) => root.inject(o), report: opts.mcpReport, usage });
 
   // ---- IndexNow (migration 005) -------------------------------------------
   // The root key file search engines fetch to verify pings about this host.
@@ -395,6 +413,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         offset: req.query.offset,
         includeCandidate: req.query.include === "candidate",
       });
+      if (req.query.offset === 0) req.usageSearch = { q: req.query.q, results: res.items.length };
       return {
         ...res,
         items: res.items.map((s) => ({
