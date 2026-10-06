@@ -137,6 +137,11 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
     `createMcpHandler`'s `onerror` and go to the route's reporter (`McpReporter`, tag
     `mcp:rejected_request`). v0.1.8 shipped without this; a live probe with a 2099-01-01
     client produced no event, which is how it was found (v0.1.9).
+- Scanner noise (PROJECTNOOSPHERE-5/-6, 2026-10-06): `triageMcpError` also drops an
+  "unsupported protocol version" whose value is not a real-looking date on or after
+  2024-11-05 (e.g. 1999-01-01), and request-param validation failures (zod issues such as
+  `invalid_type`, which Sentry names `JsonRpcError_-32603`). The responses clients get are
+  unchanged. A real newer version (e.g. a 2027 date) is still a warning: upgrade the SDK.
 - `/mcp` is hijacked, so its handler reports its own crashes.
 
 ## Security of content
