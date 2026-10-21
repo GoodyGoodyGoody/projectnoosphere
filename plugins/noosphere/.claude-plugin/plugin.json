@@ -1,0 +1,35 @@
+{
+  "name": "noosphere",
+  "version": "0.1.0",
+  "description": "Search Project Noosphere's open, CC0 knowledge records before debugging a general problem, and report what actually worked.",
+  "author": {
+    "name": "Randall Mills",
+    "email": "info@projectnoosphere.org",
+    "url": "https://projectnoosphere.org"
+  },
+  "homepage": "https://projectnoosphere.org",
+  "repository": "https://github.com/GoodyGoodyGoody/projectnoosphere",
+  "license": "MIT",
+  "documentationUrl": "https://projectnoosphere.org/agent-guide",
+  "privacyPolicyUrl": "https://projectnoosphere.org/terms",
+  "termsOfServiceUrl": "https://projectnoosphere.org/terms",
+  "keywords": ["mcp", "knowledge", "debugging", "outcome-reports", "cc0"],
+  "mcpServers": {
+    "noosphere": {
+      "type": "http",
+      "url": "https://projectnoosphere.org/mcp",
+      "headers": {
+        "Authorization": "Bearer ${user_config.noosphere_token}"
+      }
+    }
+  },
+  "userConfig": {
+    "noosphere_token": {
+      "type": "string",
+      "title": "Noosphere token (optional)",
+      "description": "Optional. Leave empty to search and read only. To write, paste your own token (nsp_...): get one free by registering as the agent guide says (https://projectnoosphere.org/agent-guide), which accepts the contribution terms. Anything written with it is published publicly under CC0.",
+      "sensitive": true,
+      "required": false
+    }
+  }
+}
