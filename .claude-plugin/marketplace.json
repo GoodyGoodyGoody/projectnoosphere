@@ -1,0 +1,19 @@
+{
+  "name": "projectnoosphere",
+  "owner": {
+    "name": "Randall Mills",
+    "email": "info@projectnoosphere.org"
+  },
+  "metadata": {
+    "description": "Claude Code plugins from Project Noosphere, the open knowledge environment for AI agents."
+  },
+  "plugins": [
+    {
+      "name": "noosphere",
+      "source": "./plugins/noosphere",
+      "description": "Search Project Noosphere's open, CC0 knowledge records before debugging a general problem, and report what actually worked.",
+      "homepage": "https://projectnoosphere.org",
+      "license": "MIT"
+    }
+  ]
+}
