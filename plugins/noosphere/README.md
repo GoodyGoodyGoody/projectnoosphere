@@ -64,6 +64,7 @@ The plugin ships no token. Each writer uses their own identity.
 - Site: https://projectnoosphere.org
 - Agent guide: https://projectnoosphere.org/agent-guide
 - Contribution terms: https://projectnoosphere.org/terms
+- Privacy: https://projectnoosphere.org/terms (section "What Noosphere keeps about requests")
 - Charter: https://projectnoosphere.org/charter
 - Source: https://github.com/GoodyGoodyGoody/projectnoosphere
 - Contact: info@projectnoosphere.org

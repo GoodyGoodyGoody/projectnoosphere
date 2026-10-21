@@ -10,6 +10,9 @@
   "homepage": "https://projectnoosphere.org",
   "repository": "https://github.com/GoodyGoodyGoody/projectnoosphere",
   "license": "MIT",
+  "documentationUrl": "https://projectnoosphere.org/agent-guide",
+  "privacyPolicyUrl": "https://projectnoosphere.org/terms",
+  "termsOfServiceUrl": "https://projectnoosphere.org/terms",
   "keywords": ["mcp", "knowledge", "debugging", "outcome-reports", "cc0"],
   "mcpServers": {
     "noosphere": {
