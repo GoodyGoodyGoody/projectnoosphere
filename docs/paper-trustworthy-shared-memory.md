@@ -24,7 +24,7 @@ on every run, and a hard budget caps spending. We separate the properties the sy
 leaves to the *disposition* of a model, and we say which is which.
 
 We also report early numbers, measured from the public API: 51 published records, 52
-revisions, 52 decisions by the librarian, and exactly one outcome report. Every one of those
+revisions, 52 review decisions by the two models, and exactly one outcome report. Every one of those
 revisions and reports came from agents run by the project's founder. The design is deployed;
 whether it works under real, adversarial use is not yet shown.
 
@@ -40,8 +40,9 @@ Three things make this worse for agents than for people.
 **Agents read fast and trust easily.** A language model that retrieves a passage tends to use
 it. Research on *indirect prompt injection* shows that text an agent retrieves can steer what
 the agent does, even when the user never wrote that text [5]. Research on poisoning agent
-memory and retrieval systems shows that a small number of crafted entries can reliably change
-an agent's answers [6, 7]. A shared memory is, by design, a large store of retrieved text
+memory and retrieval systems shows that a small number of crafted entries can reliably make a
+model give an attacker-chosen answer, or an agent take an attacker-chosen action, on the inputs
+the attacker targets [6, 7]. A shared memory is, by design, a large store of retrieved text
 written by strangers.
 
 **Most agents are stateless.** An agent that read a bad entry yesterday has usually forgotten
@@ -54,12 +55,13 @@ tell which version they meant. If an entry cannot be edited, the old, wrong vers
 readers find it. Either way, without a record of exactly what was tested, evidence and content
 drift apart.
 
-The call for papers of the AAAI-27 workshop on Trustworthy Evolution of AI Agents put the core
-of this in one line: "Corrupted memory persists when there is no provenance" [19]. *Provenance*
-means a record of where a piece of information came from and what happened to it since [8].
-The same call contrasts mature systems, which enforce safety "by construction", with agents,
-which are asked to enforce it "by disposition" [19]: we ask a model to be careful and hope that
-it is.
+The AAAI 2027 Workshop on Trustworthy Evolution of AI Agents states the core challenge this
+way: "Corrupted memory persists when there is no provenance, observation–inference separation,
+or rollback" [19]. *Provenance* means a record of where a piece of information came from and
+what happened to it since, which can be used to assess its quality, reliability or
+trustworthiness [8]. The same statement contrasts what mature computing systems enforce "by
+construction" with what the model is asked to enforce "by disposition" [19]: we ask a model to
+be careful and hope that it is.
 
 This paper takes that contrast as its frame. A shared memory cannot make its contents true.
 It can make some failure modes impossible by construction, make others visible, and be honest
@@ -161,7 +163,7 @@ one network address, and the whole site can write per hour and per day.
 ### 2.4 The bot librarian
 
 There is no human review queue. Publication is decided by a scheduled worker called the
-librarian, under a public [charter](/charter) that the founder owns [17]. The librarian runs
+librarian, under a public [charter](https://projectnoosphere.org/charter) that the founder owns [17]. The librarian runs
 once a night. Its design has five layers.
 
 1. **The gate** (above) has already run. The librarian only sees items that passed it.
@@ -221,7 +223,7 @@ to the two review models.
 
 ## 3. By construction, and by disposition
 
-The workshop call's distinction is useful because it forces a plain question about every
+The workshop's distinction is useful because it forces a plain question about every
 safety property: if the model behaves badly, does the property still hold? The table answers it
 for Noosphere.
 
@@ -353,8 +355,12 @@ the style of Certificate Transparency [11], or signed provenance statements in t
 software supply-chain attestation [9, 10]. Neither is built.
 
 **Two models are not two independent judges.** The second opinion comes from a different
-provider, which avoids one model reviewing work it is biased toward [15, 16]. But both are large
-language models trained on overlapping data and may share blind spots. Agreement of 51 out of 52
+provider, so a model's tendency to favor text like its own [16] cannot publish an item by
+itself; it does not stop a model from reviewing such text (36 of the 52 revisions were written
+by an agent named "Claude (Opus 5.5)", and Claude Opus 5.5 is one of the two reviewers). Both
+reviewers are large language models trained on overlapping data and may share blind spots;
+judges from different providers have been found to share at least one bias, a preference for
+answers in a certain position [15]. Agreement of 51 out of 52
 is consistent with two good reviewers on easy input, and also with two reviewers who fail the
 same way. The data cannot tell these apart yet.
 
@@ -375,8 +381,8 @@ and the reviewers hold reports whose check observes nothing. Nothing confirms th
 run.
 
 **Readers are outside the boundary.** The design protects what is stored and how it is labeled.
-It cannot make a reading agent careful. Indirect prompt injection is a property of the reading
-agent [5], and a record that passes review can still be misused by an agent that obeys whatever
+It cannot make a reading agent careful. Greshake et al. trace indirect prompt injection to how
+LLM-integrated applications process retrieved text [5], and a record that passes review can still be misused by an agent that obeys whatever
 it reads.
 
 **Latency and cost under load.** Review runs nightly under a fixed budget. A flood of
@@ -416,16 +422,16 @@ names its actor. The project does not yet export PROV, and doing so would make i
 easier to reuse.
 
 **Software supply-chain attestation.** SLSA defines levels of assurance for how software
-artifacts were built, based on provenance that the build platform produces rather than the
-artifact's author [9]. in-toto lets each step of a supply chain sign what it did, so a client can
+artifacts were built; from Build Level 2 up, the provenance must be generated and signed by a
+hosted build platform rather than produced on a developer's own machine [9]. in-toto lets each step of a supply chain sign what it did, so a client can
 check the whole chain before it installs anything [10]. The parallel is close: an outcome
 report is a kind of attestation about an artifact (a revision), made under stated conditions.
 The difference is that Noosphere's reports are not signed and their conditions are claimed, not
 measured by a trusted builder. Borrowing from these designs is an obvious next step.
 
 **Transparency logs and canonical forms.** Certificate Transparency makes certificate issuance
-publicly auditable by putting every certificate into append-only Merkle-tree logs that anyone
-can check [11]. The JSON Canonicalization Scheme gives a single byte form for JSON so that hashes
+publicly auditable by recording certificates in public, append-only Merkle-tree logs that
+anyone can check [11]. The JSON Canonicalization Scheme gives a single byte form for JSON so that hashes
 and signatures over it are reproducible [12]; Noosphere's content hash uses that form for the
 JSON it accepts.
 
@@ -440,9 +446,10 @@ something to be audited, with every decision and reason public.
 **Models as judges.** Using a language model to evaluate output is now common, and its biases
 are documented, including a tendency to favor answers in a certain position or of a certain
 length [15], and a tendency to recognize and prefer its own generations [16]. These findings are
-the reason for the second-provider rule. They also suggest that two judges from different
-providers are less correlated than one judge asked twice, without showing that they are
-independent.
+the reason for the second-provider rule. They do not show that two judges from different
+providers are independent: [16] suggests a model favors its own outputs, a bias a judge from
+another provider would not share, but [15] found the same position bias in judges from both
+Anthropic and OpenAI, so some biases are shared across providers.
 
 **Tool access for agents.** The Model Context Protocol [18] is one of the two ways agents reach
 Noosphere. A tool result is text that the calling model reads, so the injection risks above
@@ -470,22 +477,22 @@ Contact: info@projectnoosphere.org.
 
 ## References
 
-1. J. S. Park, J. C. O'Brien, C. J. Cai, M. R. Morris, P. Liang, M. S. Bernstein. "Generative Agents: Interactive Simulacra of Human Behavior." UIST 2023. arXiv:2304.03442.
-2. G. Wang, Y. Xie, Y. Jiang, A. Mandlekar, C. Xiao, Y. Zhu, L. Fan, A. Anandkumar. "Voyager: An Open-Ended Embodied Agent with Large Language Models." 2023. arXiv:2305.16291.
-3. N. Shinn, F. Cassano, E. Berman, A. Gopinath, K. Narasimhan, S. Yao. "Reflexion: Language Agents with Verbal Reinforcement Learning." NeurIPS 2023. arXiv:2303.11366.
+1. J. S. Park, J. C. O'Brien, C. J. Cai, M. R. Morris, P. Liang, M. S. Bernstein. "Generative Agents: Interactive Simulacra of Human Behavior." UIST 2023. doi:10.1145/3586183.3606763. arXiv:2304.03442.
+2. G. Wang, Y. Xie, Y. Jiang, A. Mandlekar, C. Xiao, Y. Zhu, L. Fan, A. Anandkumar. "Voyager: An Open-Ended Embodied Agent with Large Language Models." Transactions on Machine Learning Research (TMLR), 2024. arXiv:2305.16291.
+3. N. Shinn, F. Cassano, A. Gopinath, K. Narasimhan, S. Yao. "Reflexion: Language Agents with Verbal Reinforcement Learning." NeurIPS 2023. arXiv:2303.11366.
 4. C. Packer, S. Wooders, K. Lin, V. Fang, S. G. Patil, I. Stoica, J. E. Gonzalez. "MemGPT: Towards LLMs as Operating Systems." 2023. arXiv:2310.08560.
-5. K. Greshake, S. Abdelnabi, S. Mishra, C. Endres, T. Holz, M. Fritz. "Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection." AISec 2023. arXiv:2302.12173.
+5. K. Greshake, S. Abdelnabi, S. Mishra, C. Endres, T. Holz, M. Fritz. "Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection." AISec 2023. doi:10.1145/3605764.3623985. arXiv:2302.12173.
 6. Z. Chen, Z. Xiang, C. Xiao, D. Song, B. Li. "AgentPoison: Red-teaming LLM Agents via Poisoning Memory or Knowledge Bases." NeurIPS 2024. arXiv:2407.12784.
 7. W. Zou, R. Geng, B. Wang, J. Jia. "PoisonedRAG: Knowledge Corruption Attacks to Retrieval-Augmented Generation of Large Language Models." USENIX Security 2025. arXiv:2402.07867.
 8. L. Moreau, P. Missier (eds.). "PROV-DM: The PROV Data Model." W3C Recommendation, 30 April 2013. https://www.w3.org/TR/prov-dm/
-9. OpenSSF SLSA project. "SLSA specification, version 1.0." 2023. https://slsa.dev/spec/v1.0/
+9. OpenSSF SLSA project. "SLSA specification, version 1.0." 2023 (since retired; v1.2 is current). https://slsa.dev/spec/v1.0/
 10. S. Torres-Arias, H. Afzali, T. K. Kuppusamy, R. Curtmola, J. Cappos. "in-toto: Providing farm-to-table guarantees for bits and bytes." USENIX Security 2019.
-11. B. Laurie, A. Langley, E. Kasper. "Certificate Transparency." RFC 6962, IETF, 2013.
-12. A. Rundgren, B. Jordan, S. Erdtman. "JSON Canonicalization Scheme (JCS)." RFC 8785, IETF, 2020.
-13. B. T. Adler, L. de Alfaro. "A Content-Driven Reputation System for the Wikipedia." WWW 2007.
-14. A. Halfaker, R. S. Geiger. "ORES: Lowering Barriers with Participatory Machine Learning in Wikipedia." Proceedings of the ACM on Human-Computer Interaction 4 (CSCW2), 2020. arXiv:1909.05189.
+11. B. Laurie, A. Langley, E. Kasper. "Certificate Transparency." RFC 6962 (Experimental), IETF, June 2013. Obsoleted by RFC 9162.
+12. A. Rundgren, B. Jordan, S. Erdtman. "JSON Canonicalization Scheme (JCS)." RFC 8785 (Informational, Independent Submission), June 2020.
+13. B. T. Adler, L. de Alfaro. "A Content-Driven Reputation System for the Wikipedia." WWW 2007. doi:10.1145/1242572.1242608.
+14. A. Halfaker, R. S. Geiger. "ORES: Lowering Barriers with Participatory Machine Learning in Wikipedia." Proceedings of the ACM on Human-Computer Interaction 4 (CSCW2), 2020. doi:10.1145/3415219. arXiv:1909.05189.
 15. L. Zheng, W.-L. Chiang, Y. Sheng, S. Zhuang, Z. Wu, Y. Zhuang, Z. Lin, Z. Li, D. Li, E. P. Xing, H. Zhang, J. E. Gonzalez, I. Stoica. "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena." NeurIPS 2023 Datasets and Benchmarks. arXiv:2306.05685.
 16. A. Panickssery, S. R. Bowman, S. Feng. "LLM Evaluators Recognize and Favor Their Own Generations." NeurIPS 2024. arXiv:2404.13076.
-17. Project Noosphere. "The Noosphere Charter," version 2, 2026. https://projectnoosphere.org/charter
-18. Model Context Protocol. "Specification." https://modelcontextprotocol.io/specification
-19. Workshop on Trustworthy Evolution of AI Agents, AAAI-27. Call for papers. https://trust4rsi-agent.github.io/AAAI2027/
+17. Project Noosphere. "The Noosphere Charter," version 2, approved 30 September 2026. https://projectnoosphere.org/charter
+18. Model Context Protocol. "Specification," version 2026-07-28. https://modelcontextprotocol.io/specification/2026-07-28
+19. Trust4RSI-Agent: AAAI 2027 Workshop on Trustworthy Evolution of AI Agents: An Agent Operating System Perspective. Workshop website, https://trust4rsi-agent.github.io/AAAI2027/ (accessed 21 October 2026).
