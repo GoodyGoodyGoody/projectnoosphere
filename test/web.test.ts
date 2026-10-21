@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { createContributor } from "../src/modules/contributors.ts";
 import {
@@ -231,5 +233,51 @@ describe("discovery files", () => {
     assert.deepEqual(fm.filter((l) => l.startsWith("revision_id:")), [`revision_id: ${JSON.stringify(revisionId)}`]);
     assert.deepEqual(fm.filter((l) => l.startsWith("review_state:")), [`review_state: "candidate"`]);
     assert.ok(fm.every((l) => /^[a-z_]+: /.test(l)), "every front-matter line is one key: JSON value");
+  });
+});
+
+describe("papers", () => {
+  let t: ReturnType<typeof setup>;
+  before(() => { t = setup(); });
+  after(() => t.close());
+  const slug = "trustworthy-shared-memory";
+  const md = readFileSync(join(import.meta.dirname, "..", "docs", `paper-${slug}.md`), "utf8");
+  const title = /^# (.+)$/m.exec(md)![1]!;
+  const escaped = title.replace(/&/g, "&amp;").replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+
+  test("the paper is a page in the site layout, with its title, byline and a Markdown alternate", async () => {
+    const res = await get(t, `/papers/${slug}`);
+    assert.equal(res.statusCode, 200);
+    assert.match(res.headers["content-type"] as string, /text\/html/);
+    assert.ok(res.body.includes(`<title>${escaped} — Project Noosphere</title>`));
+    assert.ok(res.body.includes("<h1>"), "rendered Markdown, not raw text");
+    assert.ok(res.body.includes("Randall Mills, founder of Project Noosphere"));
+    assert.ok(res.body.includes(`<link rel="canonical" href="${TEST_ORIGIN}/papers/${slug}">`));
+    assert.ok(res.body.includes(`href="/papers/${slug}.md"`));
+    assert.ok(res.body.includes(`<a href="/papers">Papers</a>`), "the footer links the papers");
+  });
+
+  test("the raw Markdown is served as text/markdown, byte for byte", async () => {
+    const res = await get(t, `/papers/${slug}.md`);
+    assert.equal(res.statusCode, 200);
+    assert.match(res.headers["content-type"] as string, /^text\/markdown/);
+    assert.equal(res.body, md);
+  });
+
+  test("the papers index lists it; an unknown paper is a 404", async () => {
+    const index = await get(t, "/papers");
+    assert.equal(index.statusCode, 200);
+    assert.ok(index.body.includes(`href="/papers/${slug}"`));
+    for (const url of ["/papers/no-such-paper", "/papers/no-such-paper.md", `/papers/${slug}x`]) {
+      assert.equal((await get(t, url)).statusCode, 404, url);
+    }
+  });
+
+  test("the sitemap and llms.txt list the paper on the configured origin", async () => {
+    const sitemap = (await get(t, "/sitemap.xml")).body;
+    assert.ok(sitemap.includes(`<loc>${TEST_ORIGIN}/papers/${slug}</loc>`));
+    const llms = (await get(t, "/llms.txt")).body;
+    assert.ok(llms.includes(`${TEST_ORIGIN}/papers/${slug}.md`));
+    assert.ok(llms.includes(title));
   });
 });

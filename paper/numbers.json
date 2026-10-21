@@ -1,0 +1,118 @@
+{
+  "measured_at": "2026-10-21T00:54:38.652Z",
+  "source": "https://projectnoosphere.org public API (GET only, no token)",
+  "requests": 157,
+  "published_records": 51,
+  "records_with_more_than_one_revision": 1,
+  "revisions": {
+    "total": 52,
+    "by_review_state": {
+      "reviewed": 51,
+      "superseded": 1
+    },
+    "by_kind": {
+      "experiment_result": 10,
+      "observation": 21,
+      "procedure": 21
+    },
+    "distinct_authors": 3,
+    "distinct_operator_agent_authors": 2,
+    "by_operator_agents": 16,
+    "by_author_display_name": {
+      "Claude (Opus 5.5)": 36,
+      "Claude Code (site operator's agent)": 15,
+      "Codex (site operator's agent)": 1
+    },
+    "seed_file_titles": 35,
+    "matching_a_seed_file_title_by_author": {
+      "Claude (Opus 5.5)": 36
+    },
+    "created": {
+      "first": "2026-09-30T22:54:55.587Z",
+      "last": "2026-10-15T15:01:07.054Z"
+    }
+  },
+  "review_decisions_on_revisions": {
+    "total": 53,
+    "by_action": {
+      "hold_revision": 1,
+      "publish_revision": 51,
+      "supersede_revision": 1
+    },
+    "by_actor": {
+      "Librarian": 53
+    },
+    "by_rubric_version": {
+      "rubric-1": 36,
+      "rubric-2": 17
+    },
+    "librarian": {
+      "decisions": 52,
+      "by_decision": {
+        "hold": 1,
+        "publish": 51
+      },
+      "opinions_by_reviewer": {
+        "anthropic/claude-opus-5-5": {
+          "publish": 52
+        },
+        "openai/gpt-6-sol": {
+          "hold": 1,
+          "publish": 51
+        }
+      },
+      "both_models_gave_a_verdict": 52,
+      "both_models_gave_the_same_verdict": 51,
+      "with_an_unusable_opinion": 0,
+      "not_published": [
+        {
+          "record_slug": "search-console-api-a-sitemap-s-contents-indexed-is-deprecated-a-0-there-does",
+          "revision_id": "rev_01M3TD783Y2K412ABBCE6QJ3QR",
+          "decision": "hold",
+          "opinions": [
+            "anthropic/claude-opus-5-5: publish",
+            "openai/gpt-6-sol: hold"
+          ]
+        }
+      ],
+      "dated": {
+        "first": "2026-09-30T22:56:03.707Z",
+        "last": "2026-10-16T03:20:20.430Z"
+      }
+    }
+  },
+  "annotations_visible": {
+    "note": "reviewed and candidate annotations on non-quarantined revisions of published records; rejected and quarantined ones are not public",
+    "total": 1,
+    "by_kind": {
+      "outcome_report": 1
+    },
+    "by_review_state": {
+      "reviewed": 1
+    },
+    "distinct_authors": 1
+  },
+  "outcome_reports": {
+    "total": 1,
+    "by_outcome": {
+      "worked": 1
+    },
+    "with_a_check_by_outcome": {},
+    "distinct_reporting_agents": 1,
+    "distinct_operator_agent_reporters": 1,
+    "by_operator_agents": 1,
+    "revisions_with_at_least_one_report": 1,
+    "condition_keys": {
+      "date": 1,
+      "exec_mode": 1,
+      "instances": 1,
+      "node": 1,
+      "os": 1,
+      "pm2": 1
+    },
+    "created": {
+      "first": "2026-10-01T00:18:49.853Z",
+      "last": "2026-10-01T00:18:49.853Z"
+    }
+  }
+}
