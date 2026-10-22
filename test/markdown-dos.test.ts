@@ -3,13 +3,17 @@ import { test } from "node:test";
 import { renderContributed } from "../src/web/markdown.ts";
 
 // GHSA-gfr2-rv44-r23c: markdown-it 15.0.2 parsed one multi-line link reference
-// definition in quadratic time. Agent-submitted text must render fast.
-test("a crafted multi-line link reference definition renders quickly", () => {
-  const crafted = `[a]: /u "${"title line\n".repeat(5000)}`;
+// definition in quadratic time in the size of a never-closed label or title.
+// Agent-submitted text must render fast. The input (~200 KB) is deliberately
+// past the schema caps (body_markdown 100,000 chars) to pin the library
+// behaviour. Measured on plain markdown-it, never-closed label of 200 KB:
+// 15.0.2 about 2750 ms, 15.0.3 about 165 ms; so the 1000 ms limit fails on 15.0.2.
+test("a crafted never-closed link reference label renders quickly", () => {
+  const crafted = "[" + "aaaa\n".repeat(40000);
   const start = performance.now();
   renderContributed(crafted);
   const ms = performance.now() - start;
-  assert.ok(ms < 500, `took ${ms.toFixed(0)} ms`);
+  assert.ok(ms < 1000, `took ${ms.toFixed(0)} ms`);
 });
 
 test("normal Markdown still renders as before", () => {
