@@ -7,7 +7,8 @@ import { triageMcpError } from "./error-status.ts";
 import { INNER_HEADER, type Usage } from "./usage.ts";
 
 // The hosted MCP endpoint: /mcp serves the same six tools as mcp/server.ts to
-// clients that connect by URL. createMcpHandler (SDK v2) speaks protocol
+// clients that connect by URL; /mcp/read serves only the two read tools, with
+// no authentication at all. createMcpHandler (SDK v2) speaks protocol
 // revision 2026-07-28 AND falls back to stateless 2025-era serving, per
 // request. On SDK v1 every 2026-07-28 client got "Unsupported protocol
 // version" (Sentry PROJECTNOOSPHERE-5, 7 clients on the first night listed).
@@ -72,6 +73,19 @@ export function registerMcpRoute(
   app: FastifyInstance,
   opts: { publicOrigin: string; inject: Inject; report?: McpReporter; usage?: Usage },
 ): void {
+  mountMcp(app, "/mcp", opts, false);
+  // The same server with only search and get_revision, and no authentication:
+  // for clients that can only send a URL (OpenAI's plugin directory has no
+  // bearer-token flow). An Authorization header there never reaches a tool.
+  mountMcp(app, "/mcp/read", opts, true);
+}
+
+function mountMcp(
+  app: FastifyInstance,
+  url: "/mcp" | "/mcp/read",
+  opts: { publicOrigin: string; inject: Inject; report?: McpReporter; usage?: Usage },
+  readOnly: boolean,
+): void {
   const report = opts.report ?? sentryReport;
   const handler = createMcpHandler(({ authInfo }) => {
     const caller = authInfo?.extra as Partial<Caller> | undefined;
@@ -80,8 +94,9 @@ export function registerMcpRoute(
     if (!caller?.clientIp) throw new Error("mcp: caller address missing from authInfo");
     return buildNoosphereMcp({
       base: opts.publicOrigin,
-      token: caller.token || undefined,
+      token: readOnly ? undefined : caller.token || undefined,
       fetch: inProcessFetch(opts.inject, caller.clientIp, caller.usageNonce),
+      readOnly,
     });
   }, {
     onerror: (error) => {
@@ -92,11 +107,11 @@ export function registerMcpRoute(
   const node = toNodeHandler(handler);
 
   // GET and DELETE go to the SDK too: it answers them for each protocol era.
-  app.route({ method: ["GET", "POST", "DELETE"], url: "/mcp", bodyLimit: MCP_BODY_LIMIT, handler: async (req, reply) => {
+  app.route({ method: ["GET", "POST", "DELETE"], url, bodyLimit: MCP_BODY_LIMIT, handler: async (req, reply) => {
     const auth = req.headers.authorization;
-    const token = typeof auth === "string" && /^Bearer\s+\S+$/i.test(auth) ? auth.replace(/^Bearer\s+/i, "") : "";
+    const token = !readOnly && typeof auth === "string" && /^Bearer\s+\S+$/i.test(auth) ? auth.replace(/^Bearer\s+/i, "") : "";
     // Usage counts: who is calling, and which tool (never throws; memory only).
-    const counted = req.method === "POST" ? opts.usage?.mcpBegin(req) : undefined;
+    const counted = req.method === "POST" ? opts.usage?.mcpBegin(req, readOnly ? "mcp-read" : "mcp") : undefined;
     const caller: Caller = { token, clientIp: req.ip, usageNonce: counted?.nonce ?? null };
     // The SDK writes the response itself; Fastify's error handler no longer
     // runs after hijack, so errors are answered here.

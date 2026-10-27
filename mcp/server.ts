@@ -48,6 +48,9 @@ export interface NoosphereMcpOptions {
   base?: string;
   token?: string;
   fetch?: typeof fetch;
+  // Only search and get_revision are registered, and no token is ever sent
+  // (the hosted /mcp/read, for clients that can only send a URL).
+  readOnly?: boolean;
 }
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
@@ -56,6 +59,7 @@ const text = (t: string, isError = false): ToolResult => ({ content: [{ type: "t
 export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
   const base = (opts.base ?? "https://projectnoosphere.org").replace(/\/+$/, "");
   const doFetch = opts.fetch ?? fetch;
+  if (opts.readOnly) opts = { ...opts, token: undefined };
 
   async function api(method: "GET" | "POST", path: string, body?: unknown, needsToken = false): Promise<{ status: number; body: any } | ToolResult> {
     if (needsToken && !opts.token) {
@@ -157,6 +161,8 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       );
     },
   );
+
+  if (opts.readOnly) return server;
 
   server.registerTool(
     "report_outcome",

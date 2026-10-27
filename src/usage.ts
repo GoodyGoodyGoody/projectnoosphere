@@ -17,7 +17,8 @@ import { normalizeIp } from "./limits.ts";
 //   the response is sent; a timer writes the batch. A counting error is logged
 //   once and swallowed. Memory is bounded everywhere.
 
-export type Channel = "mcp" | "web" | "house" | "probe";
+// mcp-read: the hosted read-only endpoint, /mcp/read (migration 008).
+export type Channel = "mcp" | "mcp-read" | "web" | "house" | "probe";
 // "page" = an outside caller that only read pages (never used a tool): one
 // separate number, never counted as a returning user.
 export type VisitorClass = "outside" | "house" | "probe" | "page";
@@ -369,9 +370,10 @@ export class Usage {
     }
   }
 
-  // One POST to /mcp. Returns the id its in-process API calls carry, and a
-  // function to call when the response is done. Never throws.
-  mcpBegin(req: { ip: string; headers: Record<string, string | string[] | undefined>; body: unknown }): {
+  // One POST to /mcp (or /mcp/read, whose outside calls count as "mcp-read").
+  // Returns the id its in-process API calls carry, and a function to call when
+  // the response is done. Never throws.
+  mcpBegin(req: { ip: string; headers: Record<string, string | string[] | undefined>; body: unknown }, outside: "mcp" | "mcp-read" = "mcp"): {
     nonce: string | null;
     finish: (status: number) => void;
   } {
@@ -397,7 +399,7 @@ export class Usage {
       const client = said ?? found?.client ?? fam.label;
       const house = isServerAddress(req.ip) || isHouseToken(this.db, auth);
       const probe = !house && (isProbeAgent(ua) || isProbeAgent(infoName ?? found?.client));
-      const channel: Channel = house ? "house" : probe ? "probe" : "mcp";
+      const channel: Channel = house ? "house" : probe ? "probe" : outside;
       const cls: VisitorClass = house ? "house" : probe ? "probe" : "outside";
       const visitor = this.visitorHash(req.ip, fam.name);
       const day = this.today();
@@ -407,7 +409,7 @@ export class Usage {
       if (said) remembered.client = said;
       remembered.visitor = visitor;
       this.touchCaller(key, remembered);
-      const entry = channel === "mcp" ? remembered : undefined;
+      const entry = channel === outside ? remembered : undefined;
       const nonce = toolName ? randomBytes(16).toString("hex") : null;
       const call: InnerCall = { channel, client, counted: false };
       if (nonce) this.inner.set(nonce, call);
@@ -424,7 +426,7 @@ export class Usage {
                 entry.real = true;
                 for (const [k, n] of entry.pending) {
                   const [d, s] = k.split("|") as [string, string];
-                  for (let i = 0; i < n; i++) this.count("connect", "mcp", client, s, d);
+                  for (let i = 0; i < n; i++) this.count("connect", outside, client, s, d);
                 }
                 entry.pending.clear();
               }
@@ -556,7 +558,7 @@ export function countRequest(usage: Usage, db: DB, req: CountableRequest, status
   try {
     const route = req.routeOptions.url;
     // /mcp counts itself (mcpBegin); health checks are operations, not use.
-    if (route === "/mcp" || route === "/healthz" || route === "/readyz") return;
+    if (route === "/mcp" || route === "/mcp/read" || route === "/healthz" || route === "/readyz") return;
     const tool = toolFor(req.method, route, req.query, req.body);
     const nonce = req.headers[INNER_HEADER];
     const inner = typeof nonce === "string" ? usage.inner.get(nonce) : undefined;
