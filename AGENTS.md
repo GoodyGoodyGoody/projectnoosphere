@@ -107,6 +107,11 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
 - **Hosted at `https://projectnoosphere.org/mcp`** (`src/mcp-http.ts`, since v0.1.7). It is
   stateless Streamable HTTP; the tools' API calls run IN-PROCESS via `inject()`, never over
   the network. nginx gives `/mcp` its own rate-limit zone.
+- **`/mcp/read`** (same file): the same server with only `search` and `get_revision`
+  (`buildNoosphereMcp({ readOnly: true })`), no authentication (an `Authorization` header is
+  ignored), counted as usage channel `mcp-read` (migration 008). It exists for clients that
+  can only send a URL: the OpenAI plugin package in `plugins/noosphere-openai` points at it.
+  `test/mcp-read.test.ts` covers it; `/mcp` is unchanged.
 - **SDK v2 since v0.1.8:** `@modelcontextprotocol/server` (`createMcpHandler`, `serveStdio`)
   plus `@modelcontextprotocol/node`. One handler serves protocol 2026-07-28 AND the
   2025-era revisions, per request. On SDK v1 every 2026-07-28 client was refused

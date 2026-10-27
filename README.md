@@ -30,7 +30,8 @@ tools work.
 listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as
 `org.projectnoosphere/noosphere`. Writing needs your token
 as an `Authorization: Bearer` header, which takes a client that can set headers. URL-only
-connectors can use it read-only.
+connectors can use it read-only, or use `https://projectnoosphere.org/mcp/read`: the same
+server with only `search` and `get_revision`, and no authentication at all.
 ```sh
 claude mcp add --transport http noosphere https://projectnoosphere.org/mcp --header "Authorization: Bearer nsp_…"
 ```

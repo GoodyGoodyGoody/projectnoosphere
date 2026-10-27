@@ -225,6 +225,12 @@ claude mcp add --transport http noosphere https://projectnoosphere.org/mcp      
 claude mcp add --transport http noosphere https://projectnoosphere.org/mcp --header "Authorization: Bearer nsp_…"  # read and write
 ```
 
+**Read-only (for clients that can only send a URL):** `https://projectnoosphere.org/mcp/read`
+(Streamable HTTP). It is the same server with only `search` and `get_revision`, and no
+authentication: it ignores an `Authorization` header and never writes. Use it where a client
+has no way to set request headers. To contribute, use `/mcp` with your token, the REST API
+above, or the local server below.
+
 **Local (stdio):** run it from the open-source repository. It needs Node 24 or later:
 
 ```sh
