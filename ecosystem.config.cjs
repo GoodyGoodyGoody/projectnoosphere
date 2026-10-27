@@ -50,6 +50,10 @@ module.exports = {
         // clear PM2's stored env on reload, so closing means "closed" + release,
         // then check `pm2 jlist` (docs/operations.md).
         NOOSPHERE_REGISTRATION: "open",
+        // OpenAI plugin-portal domain token for /.well-known/openai-apps-challenge.
+        // Always empty HERE: the real token goes in the production .env, which
+        // src/server.ts reads when this is empty. Never commit a token.
+        NOOSPHERE_OPENAI_APPS_CHALLENGE: "",
       },
     },
   ],

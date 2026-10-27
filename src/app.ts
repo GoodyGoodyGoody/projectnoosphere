@@ -101,6 +101,10 @@ export interface AppOptions {
   mcpReport?: McpReporter;
   // Private usage counts (src/usage.ts). Tests set the clock and the caps.
   usage?: UsageOptions;
+  // The domain-verification token OpenAI's plugin portal issues, served at
+  // /.well-known/openai-apps-challenge (NOOSPHERE_OPENAI_APPS_CHALLENGE).
+  // Unset or empty: that path is a 404 like any unknown route.
+  openaiAppsChallenge?: string;
 }
 
 export const DEFAULT_PUBLIC_ORIGIN = "https://projectnoosphere.org";
@@ -336,6 +340,14 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     } catch {
       return reply.code(503).send({ status: "database_unavailable" });
     }
+  });
+
+  // Exactly the token, as plain text with no trailing newline: the portal
+  // compares it byte for byte.
+  app.get("/.well-known/openai-apps-challenge", async (_req, reply) => {
+    const token = opts.openaiAppsChallenge ?? "";
+    if (!token) throw new ApiError(404, "not_found", "no such route");
+    return reply.type("text/plain; charset=utf-8").header("cache-control", "no-store").send(token);
   });
 
   registerWebRoutes(app, { db, publicOrigin });

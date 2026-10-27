@@ -148,7 +148,7 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
 - Private aggregates only. **No usage table may ever hold an address, a user agent, a
   contributor id or a token**; `test/usage.test.ts` scans every column for them.
 - Search text is kept 30 days and secrets/personal data become `[withheld]`. Visitor hashes
-  use a monthly key. docs/terms.md says so publicly: change both together.
+  use a monthly key. docs/terms.md and docs/privacy.md say so publicly: change them together.
 - Counting must never slow or fail a request: memory only on the request path, batched
   writes, errors logged once and swallowed.
 
@@ -210,5 +210,12 @@ Antigravity/Gemini all receive the same operational context.
 - **Registration is switched by `NOOSPHERE_REGISTRATION` in `ecosystem.config.cjs`**, always
   as an explicit `"open"` or `"closed"`, then a release. Check the result in `pm2 jlist`.
   See `docs/operations.md`.
+- **`/.well-known/openai-apps-challenge`** serves `NOOSPHERE_OPENAI_APPS_CHALLENGE` exactly, as
+  `text/plain` with no trailing newline (OpenAI's plugin-portal domain check). Empty or unset:
+  404. `ecosystem.config.cjs` keeps it `""`; the real token goes in the production `.env`,
+  which `src/server.ts` reads for this one key, then a release. Never commit a token.
+- **`docs/privacy.md` (/privacy) states what the site keeps and for how long.** Change it with
+  any change to usage counts, registration, keys, logs or outside services (Sentry, the
+  librarian's providers), as with docs/terms.md.
 - **Sentry PROJECTNOOSPHERE-1 ("ModuleJob.run", level info, resolved) is not a bug.** It
   was the launch test event proving the DSN wiring.

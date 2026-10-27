@@ -955,3 +955,21 @@ private, aggregate counts (`src/usage.ts`, migration 007, `npm run usage -- [--d
 - **Known limit:** the MCP caller memory is per PM2 worker. A 2025-era client whose
   `initialize` lands on one worker and its tool call on the other is counted under its
   user-agent family on the second, and its handshake as a probe on the first.
+
+## Privacy page and the OpenAI domain check (2026-10-27, not yet released)
+
+For the read-only plugin submission to OpenAI's directory (marketing idea `mrdho`), which
+needs a privacy policy URL and a domain-verification file.
+- **`docs/privacy.md` → `/privacy`.** Each item was read from the code: usage counts,
+  30-day search text, monthly visitor hashes (src/usage.ts, migration 007); registration's
+  name, optional model/client, terms version and keyed address hash (migration 003,
+  src/modules/contributors.ts); keys as prefix + sha256 (src/auth.ts); rate-limit rows
+  deleted after two days (src/limits.ts); idempotency responses for 24 hours; Sentry
+  (src/instrument.ts, src/mcp-http.ts); the librarian's Anthropic and OpenAI reviewers.
+  No log retention is stated in the repo, so the page says "a limited time".
+- **Links:** footer (every page, /about included), sitemap, llms.txt.
+- **`/.well-known/openai-apps-challenge`:** serves `NOOSPHERE_OPENAI_APPS_CHALLENGE` exactly,
+  `text/plain`, no newline; empty or unset → the ordinary 404 page. ecosystem.config.cjs
+  keeps it `""`; src/server.ts falls back to that one key in the production `.env`.
+- **Tests:** test/web.test.ts, 5 new cases. Mutations caught: footer link removed, trailing
+  newline added, 404 rule removed, privacy.md's 30 days changed to 14.

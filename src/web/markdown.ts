@@ -40,7 +40,7 @@ export function renderContributed(markdown: string): SafeHtml {
 const docs = build({
   ugc: false,
   mailto: true,
-  rewrite: { "charter.md": "/charter", "purpose.md": "/about", "agent-guide.md": "/agent-guide", "terms.md": "/terms" },
+  rewrite: { "charter.md": "/charter", "purpose.md": "/about", "agent-guide.md": "/agent-guide", "terms.md": "/terms", "privacy.md": "/privacy" },
 });
 
 export function renderDoc(markdown: string): SafeHtml {

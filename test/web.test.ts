@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
+import { IDEMPOTENCY_TTL_MS } from "../src/idempotency.ts";
 import { createContributor } from "../src/modules/contributors.ts";
+import { SEARCH_RETENTION_DAYS } from "../src/usage.ts";
 import {
   bearer, createRecordAs, propose, publish, publishedRecord, sampleOutcome, sampleRecord, setup, TEST_ORIGIN,
 } from "./helpers.ts";
@@ -51,7 +53,7 @@ describe("public pages", () => {
 
   test("mailto links: allowed in the site's own pages, never in contributed Markdown", async () => {
     // The contact address is a working link on About and Terms...
-    for (const url of ["/about", "/terms"]) {
+    for (const url of ["/about", "/terms", "/privacy"]) {
       const body = (await get(t, url)).body;
       const links = body.match(/<a href="mailto:info@projectnoosphere\.org">/g) ?? [];
       assert.ok(links.length >= 2, `${url}: the document's own contact link and the footer's (got ${links.length})`);
@@ -279,5 +281,76 @@ describe("papers", () => {
     const llms = (await get(t, "/llms.txt")).body;
     assert.ok(llms.includes(`${TEST_ORIGIN}/papers/${slug}.md`));
     assert.ok(llms.includes(title));
+  });
+});
+
+describe("privacy", () => {
+  let t: ReturnType<typeof setup>;
+  before(() => { t = setup(); });
+  after(() => t.close());
+
+  test("/privacy renders the policy: contact, the 30-day search rule, effective date", async () => {
+    const res = await get(t, "/privacy");
+    assert.equal(res.statusCode, 200);
+    assert.match(res.headers["content-type"] as string, /text\/html/);
+    assert.ok(res.body.includes("<h1>Privacy</h1>"), "rendered Markdown, not raw text");
+    assert.ok(res.body.includes(`<link rel="canonical" href="${TEST_ORIGIN}/privacy">`));
+    assert.ok(res.body.includes(`<a href="mailto:info@projectnoosphere.org">info@projectnoosphere.org</a>`));
+    assert.ok(res.body.includes(`Search text, for ${SEARCH_RETENTION_DAYS} days.`));
+    assert.ok(res.body.includes("<code>[withheld]</code>"));
+    assert.ok(res.body.includes("Effective 2026-10-27."));
+    // Its links to the other docs point at their pages, not at .md files.
+    assert.ok(res.body.includes(`<a href="/terms">`) && !res.body.includes(`href="terms.md"`));
+  });
+
+  test("the policy's retention periods are the code's", () => {
+    const md = readFileSync(join(import.meta.dirname, "..", "docs", "privacy.md"), "utf8");
+    assert.ok(md.includes(`for ${SEARCH_RETENTION_DAYS} days`));
+    assert.ok(md.includes(`kept for ${IDEMPOTENCY_TTL_MS / 3_600_000} hours`));
+  });
+
+  test("every page's footer links Privacy next to the terms; the sitemap and llms.txt list it", async () => {
+    for (const url of ["/", "/about", "/terms", "/privacy", "/papers"]) {
+      const body = (await get(t, url)).body;
+      assert.ok(body.includes(`<a href="/terms">Contribution terms</a> · <a href="/privacy">Privacy</a>`), url);
+    }
+    assert.ok((await get(t, "/sitemap.xml")).body.includes(`<loc>${TEST_ORIGIN}/privacy</loc>`));
+    assert.ok((await get(t, "/llms.txt")).body.includes(`${TEST_ORIGIN}/privacy`));
+  });
+});
+
+describe("/.well-known/openai-apps-challenge", () => {
+  const url = "/.well-known/openai-apps-challenge";
+
+  test("unset or empty: 404, like any unknown route", async () => {
+    for (const value of [undefined, ""]) {
+      const t = setup(value === undefined ? {} : { openaiAppsChallenge: value });
+      try {
+        const res = await get(t, url);
+        assert.equal(res.statusCode, 404, String(value));
+        const unknown = await get(t, "/.well-known/no-such-file");
+        assert.equal(unknown.statusCode, 404);
+        assert.equal(res.headers["content-type"], unknown.headers["content-type"]);
+        assert.equal(res.body, unknown.body, "indistinguishable from an unknown route");
+      } finally {
+        await t.close();
+      }
+    }
+  });
+
+  test("set: exactly the token, as text/plain, no trailing newline", async () => {
+    const token = "test-challenge-token_0123456789abcdef";
+    const t = setup({ openaiAppsChallenge: token });
+    try {
+      const res = await get(t, url);
+      assert.equal(res.statusCode, 200);
+      assert.match(res.headers["content-type"] as string, /^text\/plain/);
+      assert.equal(res.body, token);
+      // No other well-known path appears with it.
+      assert.equal((await get(t, "/.well-known/openai-apps-challenge/x")).statusCode, 404);
+      assert.equal((await get(t, "/.well-known/security.txt")).statusCode, 404);
+    } finally {
+      await t.close();
+    }
   });
 });
