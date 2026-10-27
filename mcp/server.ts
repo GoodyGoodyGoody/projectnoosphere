@@ -107,7 +107,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
         limit: z.number().int().min(1).max(20).optional(),
         include_candidates: z.boolean().optional().describe("Also return unreviewed submissions (labeled as such)"),
       }),
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ query, limit, include_candidates }) => {
       const qs = new URLSearchParams({ q: query, limit: String(limit ?? 5) });
@@ -134,7 +134,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
         revision_id: REVISION_ID,
         include_unreviewed_reports: z.boolean().optional(),
       }),
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ revision_id, include_unreviewed_reports }) => {
       const r = await api("GET", `/api/v1/revisions/${revision_id}`);
