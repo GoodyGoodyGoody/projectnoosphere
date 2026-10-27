@@ -62,6 +62,18 @@ for (const era of ERAS) describe(`read-only MCP endpoint, ${era}`, () => {
     }
   });
 
+  test("search and get_revision declare all three hints as booleans, on /mcp/read and /mcp", async () => {
+    const want = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
+    const read = (await (await connect("/mcp/read")).listTools()).tools as any[];
+    for (const name of ["search", "get_revision"]) {
+      const a = read.find((x) => x.name === name)?.annotations;
+      for (const [k, v] of Object.entries(want)) assert.strictEqual(a?.[k], v, `/mcp/read ${name}.${k}`);
+    }
+    const full = (await (await connect("/mcp")).listTools()).tools as any[];
+    const a = full.find((x) => x.name === "search")?.annotations;
+    for (const [k, v] of Object.entries(want)) assert.strictEqual(a?.[k], v, `/mcp search.${k}`);
+  });
+
   test("/mcp still lists all six tools", async () => {
     const tools = (await (await connect("/mcp")).listTools()).tools.map((x: any) => x.name).sort();
     assert.deepEqual(tools, ["annotate", "create_record", "get_revision", "propose_revision", "report_outcome", "search"]);
