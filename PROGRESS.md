@@ -973,3 +973,26 @@ needs a privacy policy URL and a domain-verification file.
   keeps it `""`; src/server.ts falls back to that one key in the production `.env`.
 - **Tests:** test/web.test.ts, 5 new cases. Mutations caught: footer link removed, trailing
   newline added, 404 rule removed, privacy.md's 30 days changed to 14.
+
+## /mcp/read and the OpenAI plugin package (2026-10-27, not yet released)
+
+OpenAI's portal has no bearer-token flow, so an unauthenticated reviewer of `/mcp` would see
+four write tools that fail. The listing needs an endpoint with only the read tools.
+- **`/mcp/read`** (src/mcp-http.ts): the same handler as `/mcp`, built with
+  `buildNoosphereMcp({ readOnly: true })`: only `search` and `get_revision` are registered, and
+  no token is passed on (the route drops it, and so does the server). A write tool name gets the
+  SDK's "Tool … not found". `/mcp` is unchanged; its tests are untouched.
+- **Usage channel `mcp-read`** (src/usage.ts). Migration 008 rebuilds `usage_counts` because
+  SQLite can't alter a CHECK: same columns and key, every row copied, one more allowed value.
+  The previous release still runs against it (it writes only the old values, and its report
+  counts unknown channels as outside).
+- **nginx:** `deploy/nginx/projectnoosphere.conf` gives `/mcp/read` `/mcp`'s zone. The live
+  vhost needs the same block (shared infrastructure, Randall's OK); without it, `/mcp/read` is
+  limited only by the app's own per-address limits.
+- **`plugins/noosphere-openai/`** and `npm run package:openai` (scripts/package-openai-plugin.ts):
+  manifest, provider-neutral read-only skill, icon, review test cases; the ZIP is written by
+  hand with node:zlib into `dist/` (gitignored), and the script refuses a package with a missing
+  file or a server other than `/mcp/read`.
+- **Tests:** test/mcp-read.test.ts (both protocol eras) and test/openai-plugin.test.ts (reads the
+  ZIP back with its own reader, CRC included). Mutations caught: the read-only gate removed
+  (4 red), a wrong CRC in the ZIP writer.

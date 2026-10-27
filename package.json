@@ -18,7 +18,8 @@
     "librarian": "node scripts/librarian.ts",
     "librarian-smoke": "node scripts/librarian-smoke.ts",
     "restore-check": "node scripts/restore-check.ts",
-    "usage": "node scripts/usage.ts"
+    "usage": "node scripts/usage.ts",
+    "package:openai": "node scripts/package-openai-plugin.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
