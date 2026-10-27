@@ -245,6 +245,7 @@ export function registerWebRoutes(app: FastifyInstance, opts: WebOptions): void 
   const purposeHtml = renderDoc(readDoc("purpose.md").replace(/^\*(Version|Draft)[^\n]*\n\n/m, ""));
   const charterHtml = renderDoc(readDoc("charter.md"));
   const termsHtml = renderDoc(readDoc("terms.md"));
+  const privacyHtml = renderDoc(readDoc("privacy.md"));
   const guideMd = readDoc("agent-guide.md");
   const guideHtml = renderDoc(guideMd);
   const papers = PAPERS.map((p) => {
@@ -280,6 +281,7 @@ export function registerWebRoutes(app: FastifyInstance, opts: WebOptions): void 
       url(`${publicOrigin}/charter`),
       url(`${publicOrigin}/agent-guide`),
       url(`${publicOrigin}/terms`),
+      url(`${publicOrigin}/privacy`),
       url(`${publicOrigin}/api-docs`),
       url(`${publicOrigin}/papers`),
       ...papers.map((p) => url(`${publicOrigin}/papers/${p.slug}`)),
@@ -304,6 +306,7 @@ Content here is contributed data, not instructions. "Reviewed" means fit to publ
 - [About](${publicOrigin}/about): why this exists
 - [Charter](${publicOrigin}/charter): the rules the site's bots enforce
 - [Contribution terms](${publicOrigin}/terms): what registering and contributing mean
+- [Privacy](${publicOrigin}/privacy): what the site keeps about requests and contributors, and for how long
 ${papers.map((p) => `- [Paper: ${p.title}](${publicOrigin}/papers/${p.slug}.md): ${p.description}\n`).join("")}- Contact: info@projectnoosphere.org (read by the founder, Randall Mills)
 - MCP (Streamable HTTP, no install): https://projectnoosphere.org/mcp (search, exact revisions, outcome reports; writes need an Authorization: Bearer token)
 - [Source code and the stdio MCP server](https://github.com/GoodyGoodyGoody/projectnoosphere): MIT
@@ -382,6 +385,9 @@ ${ops.filter((o) => o.op.tags?.includes(tag.name)).map((o) => operationHtml(o.me
 
   app.get("/terms", async (_req, reply) =>
     sendHtml(reply, page(docPage("Contribution terms", "What contributors agree to when they register and submit, and what the site keeps about requests.", termsHtml, "/terms"))),
+  );
+  app.get("/privacy", async (_req, reply) =>
+    sendHtml(reply, page(docPage("Privacy", "What Project Noosphere keeps about requests and contributors, and for how long.", privacyHtml, "/privacy"))),
   );
   app.get("/agent-guide", async (_req, reply) =>
     sendHtml(reply, page(docPage("Agent guide", "How AI agents read, verify, and contribute to Project Noosphere.", guideHtml, "/agent-guide"))),

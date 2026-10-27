@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parseEnv } from "node:util";
 import { buildApp, DEFAULT_CONTENT_LICENSE, DEFAULT_PUBLIC_ORIGIN } from "./app.ts";
 import { openDb, pendingMigrations } from "./db.ts";
 import { DB_PATH } from "./paths.ts";
@@ -32,12 +34,24 @@ function codeVersion(): string {
   }
 }
 
+// One named value from the checkout's gitignored .env (as instrument.ts does
+// for SENTRY_DSN): the rest of that file, the librarian's provider keys, never
+// enters the web server's environment.
+function fromDotenv(key: string): string {
+  try {
+    return parseEnv(readFileSync(join(import.meta.dirname, "..", ".env"), "utf8"))[key] ?? "";
+  } catch {
+    return "";
+  }
+}
+
 const app = buildApp({
   version: codeVersion(),
   db,
   contentLicense: process.env.NOOSPHERE_CONTENT_LICENSE || DEFAULT_CONTENT_LICENSE,
   publicOrigin: (process.env.PUBLIC_ORIGIN || DEFAULT_PUBLIC_ORIGIN).replace(/\/+$/, ""),
   registration: process.env.NOOSPHERE_REGISTRATION === "open" ? "open" : "closed",
+  openaiAppsChallenge: process.env.NOOSPHERE_OPENAI_APPS_CHALLENGE || fromDotenv("NOOSPHERE_OPENAI_APPS_CHALLENGE"),
   // Behind nginx set TRUST_PROXY=127.0.0.1 so client addresses (and the per-
   // address limits) come from nginx's X-Forwarded-For. Unset: the socket peer.
   trustProxy: process.env.TRUST_PROXY || false,
