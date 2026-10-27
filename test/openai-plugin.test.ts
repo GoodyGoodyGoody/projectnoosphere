@@ -50,23 +50,38 @@ describe("OpenAI plugin package", () => {
     const out = join(scratch, "dist", "noosphere-openai-plugin.zip");
     execFileSync(process.execPath, [join(import.meta.dirname, "..", "scripts", "package-openai-plugin.ts"), "--out", out], { stdio: "pipe" });
     const files = unzip(readFileSync(out));
-    for (const f of [".codex-plugin/plugin.json", "skills/noosphere/SKILL.md", "assets/icon.png", "submission/review.json", "LICENSE"]) {
+    for (const f of ["plugin.json", "mcp.json", "skills/noosphere/SKILL.md", "assets/icon.png", "LICENSE"]) {
       assert.ok(files.has(f), `${f} is not at the ZIP's root`);
     }
-    const manifest = JSON.parse(files.get(".codex-plugin/plugin.json")!.toString("utf8"));
-    const servers = Object.values(manifest.mcpServers) as any[];
+    const mcp = JSON.parse(files.get("mcp.json")!.toString("utf8"));
+    const servers = Object.values(mcp.mcpServers) as any[];
     assert.equal(servers.length, 1);
     assert.equal(servers[0].url, READ_ENDPOINT);
     assert.equal(servers[0].url, "https://projectnoosphere.org/mcp/read");
+    assert.equal(servers[0].type, "streamable-http");
     assert.equal(servers[0].headers, undefined);
-    assert.equal(manifest.author.email, "info@projectnoosphere.org");
-    assert.equal(manifest.interface.privacyPolicyURL, "https://projectnoosphere.org/privacy");
-    assert.equal(manifest.interface.termsOfServiceURL, "https://projectnoosphere.org/terms");
+    assert.deepEqual(servers[0].extensions["com.openai"].auth, { type: "none" });
+
+    const manifest = JSON.parse(files.get("plugin.json")!.toString("utf8"));
+    assert.equal(manifest.$schema, "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
+    assert.deepEqual(manifest.author, { name: "Randall Mills", email: "info@projectnoosphere.org", url: "https://projectnoosphere.org" });
+    assert.equal(manifest.homepage, "https://projectnoosphere.org");
+    const openai = manifest.extensions["com.openai"];
+    assert.equal(openai.interface.privacyPolicyURL, "https://projectnoosphere.org/privacy");
+    assert.equal(openai.interface.termsOfServiceURL, "https://projectnoosphere.org/terms");
     assert.deepEqual(files.get("assets/icon.png"), readFileSync(join(PLUGIN_DIR, "assets/icon.png")));
-    const review = JSON.parse(files.get("submission/review.json")!.toString("utf8"));
-    assert.equal(review.test_cases.positive.length, 5);
-    assert.equal(review.test_cases.negative.length, 3);
-    assert.equal(review.demo_video_url, "", "never invent a video URL");
+    assert.equal(openai.review.test_cases.positive.length, 5);
+    assert.equal(openai.review.test_cases.negative.length, 3);
+    assert.ok(openai.review.test_cases.positive.some((c: any) => c.expected_behavior.includes("--no-verify still runs prepare-commit-msg")));
+    assert.ok(openai.review.test_cases.negative.some((c: any) => /read-only/.test(c.description) && c.description.includes("/agent-guide")));
+    assert.equal(openai.review.demo_recording_url, undefined, "never invent a video URL");
+    assert.ok(openai.publication.release_notes);
+  });
+
+  test("the package's review cases only name the read tools", () => {
+    const manifest = JSON.parse(readFileSync(join(PLUGIN_DIR, "plugin.json"), "utf8"));
+    const tools = manifest.extensions["com.openai"].review.test_cases.positive.flatMap((c: any) => c.tools_triggered.split(/,\s*/));
+    assert.deepEqual([...new Set(tools)].sort(), ["get_revision", "search"]);
   });
 
   test("the skill is provider-neutral and read-only, and keeps the data rules", () => {
@@ -92,11 +107,21 @@ describe("OpenAI plugin package", () => {
   test("a manifest pointing anywhere but /mcp/read is refused", () => {
     const copy = join(scratch, "elsewhere");
     cpSync(PLUGIN_DIR, copy, { recursive: true });
-    const path = join(copy, ".codex-plugin/plugin.json");
-    const manifest = JSON.parse(readFileSync(path, "utf8"));
-    manifest.mcpServers.noosphere.url = "https://projectnoosphere.org/mcp";
-    writeFileSync(path, JSON.stringify(manifest));
+    const path = join(copy, "mcp.json");
+    const mcp = JSON.parse(readFileSync(path, "utf8"));
+    mcp.mcpServers.noosphere.url = "https://projectnoosphere.org/mcp";
+    writeFileSync(path, JSON.stringify(mcp));
     assert.throws(() => buildPackage({ dir: copy, out: join(scratch, "elsewhere.zip") }), /must be https:\/\/projectnoosphere\.org\/mcp\/read/);
+  });
+
+  test("a listing field over the portal's limit is refused", () => {
+    const copy = join(scratch, "long");
+    cpSync(PLUGIN_DIR, copy, { recursive: true });
+    const path = join(copy, "plugin.json");
+    const manifest = JSON.parse(readFileSync(path, "utf8"));
+    manifest.extensions["com.openai"].interface.shortDescription = "Search open, versioned fixes that AI agents tested";
+    writeFileSync(path, JSON.stringify(manifest));
+    assert.throws(() => buildPackage({ dir: copy, out: join(scratch, "long.zip") }), /shortDescription is \d+ characters, more than 30/);
   });
 });
 
@@ -115,8 +140,8 @@ describe("OpenAI plugin's MCP entry", () => {
   after(() => t.close());
 
   test("lists exactly search and get_revision, and searches", async () => {
-    const manifest = JSON.parse(readFileSync(join(PLUGIN_DIR, ".codex-plugin/plugin.json"), "utf8"));
-    const url = new URL(new URL(manifest.mcpServers.noosphere.url).pathname, base);
+    const mcp = JSON.parse(readFileSync(join(PLUGIN_DIR, "mcp.json"), "utf8"));
+    const url = new URL(new URL(mcp.mcpServers.noosphere.url).pathname, base);
     const client = new Client({ name: "openai-plugin-test", version: "0" });
     await client.connect(new StreamableHTTPClientTransport(url));
     assert.deepEqual((await client.listTools()).tools.map((x: any) => x.name).sort(), ["get_revision", "search"]);

@@ -990,9 +990,14 @@ four write tools that fail. The listing needs an endpoint with only the read too
   vhost needs the same block (shared infrastructure, Randall's OK); without it, `/mcp/read` is
   limited only by the app's own per-address limits.
 - **`plugins/noosphere-openai/`** and `npm run package:openai` (scripts/package-openai-plugin.ts):
-  manifest, provider-neutral read-only skill, icon, review test cases; the ZIP is written by
-  hand with node:zlib into `dist/` (gitignored), and the script refuses a package with a missing
-  file or a server other than `/mcp/read`.
+  OpenAI's portable Agent Plugins layout (root `plugin.json` + `mcp.json`, per OpenAI's docs
+  saved 2026-10-27): identity at the root; listing text, five positive and three negative
+  review cases (live records) and release notes under `extensions.com.openai`; `mcp.json`
+  declares `/mcp/read` as `streamable-http` with `auth.type: "none"`. The demo video URL is
+  left out until it exists. The ZIP is written by hand with node:zlib into `dist/`
+  (gitignored), and the script refuses a package with a missing file, a server other than
+  `/mcp/read`, a field over the portal's limits, or a non-square icon.
+  `supportURL` is /about (the contact address is there and in every page's footer).
 - **Tests:** test/mcp-read.test.ts (both protocol eras) and test/openai-plugin.test.ts (reads the
   ZIP back with its own reader, CRC included). Mutations caught: the read-only gate removed
   (4 red), a wrong CRC in the ZIP writer.

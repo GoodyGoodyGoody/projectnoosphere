@@ -1,7 +1,8 @@
 // Builds the OpenAI plugin package (plugins/noosphere-openai) into one ZIP for
-// upload to OpenAI's plugin portal. The files sit at the ZIP's root, with
-// .codex-plugin/plugin.json at the top. Fails loudly, writing nothing, when a
-// required file is missing or the manifest stops pointing at /mcp/read.
+// upload to OpenAI's plugin portal. It uses OpenAI's portable Agent Plugins
+// layout: plugin.json, mcp.json, skills/ and assets/ at the ZIP's root. Fails
+// loudly, writing nothing, when a required file is missing, a field breaks the
+// portal's submission limits, or mcp.json stops pointing at /mcp/read.
 //
 //   npm run package:openai [-- --out dist/noosphere-openai-plugin.zip]
 //
@@ -17,14 +18,23 @@ export const PLUGIN_DIR = join(ROOT, "plugins", "noosphere-openai");
 export const DEFAULT_OUT = join(ROOT, "dist", "noosphere-openai-plugin.zip");
 export const READ_ENDPOINT = "https://projectnoosphere.org/mcp/read";
 
+export const PLUGIN_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json";
+export const MCP_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json";
+
 export const REQUIRED_FILES = [
-  ".codex-plugin/plugin.json",
+  "plugin.json",
+  "mcp.json",
   "skills/noosphere/SKILL.md",
   "assets/icon.png",
-  "submission/review.json",
   "README.md",
   "LICENSE",
 ];
+
+// The portal's submission limits (OpenAI's "Manifest fields" reference).
+const INTERFACE_LIMITS: Record<string, number> = {
+  displayName: 30, shortDescription: 30, longDescription: 4000, developerName: 80,
+  websiteURL: 1024, supportURL: 1024, privacyPolicyURL: 1024, termsOfServiceURL: 1024,
+};
 
 function fail(message: string): never {
   throw new Error(`package-openai-plugin: ${message}`);
@@ -40,44 +50,96 @@ function listFiles(dir: string): string[] {
   return out;
 }
 
+function readJson(dir: string, name: string): any {
+  try { return JSON.parse(readFileSync(join(dir, name), "utf8")); } catch (err) {
+    fail(`${name} does not parse: ${(err as Error).message}`);
+  }
+}
+
+// Width and height from a PNG's IHDR chunk, or undefined if it isn't a PNG.
+function pngSize(buf: Buffer): { width: number; height: number } | undefined {
+  if (buf.length < 24 || buf.readUInt32BE(0) !== 0x89504e47 || buf.toString("latin1", 12, 16) !== "IHDR") return undefined;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
 // What the package must say, checked before anything is written.
 export function checkPackage(dir: string): void {
   const files = new Set(listFiles(dir).map((f) => relative(dir, f).split(sep).join("/")));
   const missing = REQUIRED_FILES.filter((f) => !files.has(f));
   if (missing.length) fail(`missing required file(s) in ${dir}: ${missing.join(", ")}`);
-
-  let manifest: any;
-  try { manifest = JSON.parse(readFileSync(join(dir, ".codex-plugin/plugin.json"), "utf8")); } catch (err) {
-    fail(`.codex-plugin/plugin.json does not parse: ${(err as Error).message}`);
+  // The portal rejects ZIPs with app references or lifecycle hooks, and a
+  // .codex-plugin overlay would be ignored next to extensions.com.openai.
+  for (const f of files) {
+    if (/^(\.app\.json|hooks\/|\.codex-plugin\/|\.mcp\.json$)/.test(f)) fail(`the package must not contain ${f}`);
   }
-  for (const field of ["name", "version", "description", "author", "homepage", "license"]) {
+
+  const manifest = readJson(dir, "plugin.json");
+  if (manifest.$schema !== PLUGIN_SCHEMA) fail(`plugin.json's $schema must be ${PLUGIN_SCHEMA}`);
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(manifest.name ?? "") || manifest.name.length > 64) fail("plugin.json's name must be kebab-case, at most 64 characters");
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version ?? "")) fail("plugin.json needs a semantic version");
+  for (const field of ["description", "homepage", "license"]) {
     if (!manifest[field]) fail(`plugin.json has no ${field}`);
   }
-  const servers = Object.values(manifest.mcpServers ?? {}) as any[];
-  if (servers.length !== 1) fail(`plugin.json must declare exactly one MCP server, found ${servers.length}`);
-  if (servers[0].url !== READ_ENDPOINT) fail(`the MCP server must be ${READ_ENDPOINT}, not ${servers[0].url}`);
-  if (servers[0].headers || servers[0].auth) fail("the MCP server must have no authentication");
-  for (const key of ["composerIcon", "logo"]) {
-    const ref = manifest.interface?.[key];
-    if (typeof ref === "string" && !files.has(ref.replace(/^\.\//, ""))) fail(`interface.${key} points at a missing file: ${ref}`);
+  if (!manifest.author?.name || !manifest.author?.email) fail("plugin.json needs author.name and author.email");
+  const openai = manifest.extensions?.["com.openai"];
+  if (!openai || typeof openai !== "object") fail("plugin.json has no extensions.com.openai");
+  if ("apps" in openai || "hooks" in openai) fail("extensions.com.openai must not declare apps or hooks");
+
+  const ui = openai.interface ?? {};
+  for (const [key, max] of Object.entries(INTERFACE_LIMITS)) {
+    if (typeof ui[key] !== "string" || !ui[key]) fail(`interface.${key} is required`);
+    if (ui[key].length > max) fail(`interface.${key} is ${ui[key].length} characters, more than ${max}`);
+    if (key.endsWith("URL") && !ui[key].startsWith("https://")) fail(`interface.${key} must be HTTPS`);
   }
+  if (!ui.category) fail("interface.category is required");
+  const prompts = [ui.defaultPrompt ?? []].flat();
+  if (prompts.length > 3 || prompts.some((p: string) => p.length > 128 || p.includes("@"))) fail("interface.defaultPrompt: at most three prompts, 128 characters each, no @mentions");
+  for (const key of ["composerIcon", "logo"]) {
+    const ref = ui[key];
+    if (typeof ref !== "string" || !ref.startsWith("./")) fail(`interface.${key} must be a ./ path`);
+    if (!files.has(ref.slice(2))) fail(`interface.${key} points at a missing file: ${ref}`);
+    const data = readFileSync(join(dir, ref.slice(2)));
+    const size = pngSize(data);
+    if (!size) fail(`interface.${key} must be a PNG: ${ref}`);
+    if (size.width !== size.height || size.width < 48 || size.width > 4096 || data.length > 5 * 1024 * 1024) {
+      fail(`interface.${key} must be square, 48 to 4096 pixels and at most 5 MiB: ${ref} is ${size.width}x${size.height}`);
+    }
+  }
+
+  const review = openai.review ?? {};
+  const positive = review.test_cases?.positive ?? [];
+  const negative = review.test_cases?.negative ?? [];
+  if (positive.length !== 5) fail(`review.test_cases needs exactly five positive cases, found ${positive.length}`);
+  if (negative.length !== 3) fail(`review.test_cases needs exactly three negative cases, found ${negative.length}`);
+  const fields = (required: string[]) => (c: any) => {
+    for (const field of required) {
+      if (typeof c[field] !== "string" || !c[field]) fail(`a test case has no ${field}: ${JSON.stringify(c).slice(0, 80)}`);
+    }
+  };
+  positive.forEach(fields(["description", "prompt", "tools_triggered", "expected_behavior"]));
+  negative.forEach(fields(["description", "prompt"]));
+  for (const c of positive) {
+    for (const tool of c.tools_triggered.split(/,\s*/)) {
+      if (!["search", "get_revision"].includes(tool)) fail(`a positive case triggers ${tool}, which /mcp/read does not have`);
+    }
+  }
+  if ("test_credentials" in review || "reviewer_instructions" in review) fail("review must not contain test_credentials or reviewer_instructions");
+  if (review.demo_recording_url !== undefined && !/^https:\/\//.test(review.demo_recording_url)) fail("review.demo_recording_url must be an HTTPS URL or left out");
+  if (!openai.publication?.release_notes) fail("publication.release_notes is required");
+
+  const mcp = readJson(dir, "mcp.json");
+  if (mcp.$schema !== MCP_SCHEMA) fail(`mcp.json's $schema must be ${MCP_SCHEMA}`);
+  const servers = Object.values(mcp.mcpServers ?? {}) as any[];
+  if (servers.length !== 1) fail(`mcp.json must declare exactly one MCP server, found ${servers.length}`);
+  const server = servers[0];
+  if (server.type !== "streamable-http") fail("the MCP server's type must be streamable-http");
+  if (server.url !== READ_ENDPOINT) fail(`the MCP server must be ${READ_ENDPOINT}, not ${server.url}`);
+  if (server.headers !== undefined) fail("the MCP server must have no headers");
+  if (server.extensions?.["com.openai"]?.auth?.type !== "none") fail("the MCP server's auth.type must be none");
 
   const skill = readFileSync(join(dir, "skills/noosphere/SKILL.md"), "utf8");
   if (!/^---\nname: [a-z0-9-]+\ndescription: .+\n---\n/.test(skill)) fail("SKILL.md needs name and description front matter");
   if (/\bClaude\b/.test(skill)) fail("SKILL.md must be provider-neutral (it mentions Claude)");
-
-  let review: any;
-  try { review = JSON.parse(readFileSync(join(dir, "submission/review.json"), "utf8")); } catch (err) {
-    fail(`submission/review.json does not parse: ${(err as Error).message}`);
-  }
-  if (review.test_cases?.positive?.length !== 5) fail("review.json needs exactly five positive test cases");
-  if (review.test_cases?.negative?.length !== 3) fail("review.json needs exactly three negative test cases");
-  for (const c of [...review.test_cases.positive, ...review.test_cases.negative]) {
-    for (const field of ["scenario", "user_prompt", "expected_tools", "expected_result"]) {
-      if (c[field] === undefined || c[field] === "") fail(`a test case has no ${field}: ${JSON.stringify(c).slice(0, 80)}`);
-    }
-  }
-  if (!review.release_notes) fail("review.json has no release_notes");
 }
 
 // A plain ZIP (deflate, UTF-8 names, no extra fields), entries in sorted order.
