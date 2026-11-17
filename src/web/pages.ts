@@ -125,8 +125,7 @@ Content hash <code>${rev.content_hash}</code> · License ${rev.content_license}<
 
 // Reports on the record's OTHER published revisions: context, kept apart from
 // this revision's own reports and never counted with them.
-function otherRevisionsReports(db: DB, revisionId: string, slug: string): SafeHtml {
-  const { other_revisions: others } = reportHistory(db, revisionId);
+function otherRevisionsReports(others: History["other_revisions"], slug: string): SafeHtml {
   if (!others.length) return html``;
   const last = (o: (typeof others)[number]) =>
     (["failed", "worked", "partially_worked"] as const)
@@ -137,16 +136,43 @@ function otherRevisionsReports(db: DB, revisionId: string, slug: string): SafeHt
 <ul class="plain">${others.map((o) => html`<li><a href="${o.is_current_published ? `/r/${slug}` : `/r/${slug}/revisions/${o.revision_id}`}">${o.revision_id}</a>${o.is_current_published ? " (current)" : ""}: ${Object.entries(o.outcomes).map(([k, n], i) => html`${i ? ", " : ""}${k.replace("_", " ")} ${n}`)}${last(o)}</li>`)}</ul>`;
 }
 
+type History = ReturnType<typeof reportHistory>;
+type Cell = History["this_revision"]["by_conditions"]["cells"][number];
+
+const CELL_VERDICT: Record<string, string> = {
+  worked: "holds here",
+  partially_worked: "partly holds here",
+  failed: "fails here",
+  not_applicable: "not applicable here",
+  inconclusive: "inconclusive here",
+  mixed: "reports disagree here",
+};
+
+function checkNote(n: number, checked: number): string {
+  if (n === 1) return checked ? "with a check" : "no check";
+  return checked === n ? "all with a check" : checked === 0 ? "none with a check" : `${checked} with a check`;
+}
+
+// One line per cell of materially the same conditions.
+function cellLine(c: Cell): SafeHtml {
+  const tally = Object.entries(c.outcomes).map(([o, n], i) =>
+    html`${i ? ", " : ""}${o.replace("_", " ")} ${n} (${checkNote(n, c.outcomes_with_check[o] ?? 0)})`);
+  const who = html`${c.contributors} contributor${c.contributors === 1 ? "" : "s"}, newest ${when(c.latest_at)}`;
+  return c.verdict === "disputed"
+    ? html`<li class="disputed"><span class="badge disputed">disputed</span> ${c.label}: ${tally} · <strong>disputed: re-run the check to settle it</strong> <span class="small">(${who})</span></li>`
+    : html`<li>${c.label}: ${tally} · ${CELL_VERDICT[c.verdict] ?? c.verdict} <span class="small">(${who})</span></li>`;
+}
+
 function reportsSection(db: DB, revisionId: string, slug: string): SafeHtml {
   const counts = reportCounts(db, revisionId);
+  const history = reportHistory(db, revisionId);
+  const cells = history.this_revision.by_conditions.cells;
   const reports = listAnnotations(db, revisionId, { limit: 50, includeCandidate: false });
-  const tally = Object.entries(counts.outcomes).map(([o, n], i) => {
-    const checked = counts.outcomes_with_check[o] ?? 0;
-    return html`${i ? " · " : ""}${o.replace("_", " ")} ${n} (${checked === n ? "all" : checked} with a check)`;
-  });
   return html`<h2>Reports on this revision</h2>
-<p class="small">Counts are reports from contributors, not verification. Only reviewed reports are shown here.</p>
-${tally.length ? html`<p>${tally}</p>` : html`<p class="small">No reviewed outcome reports yet.</p>`}
+<p class="small">Counts are reports from contributors, not verification. Only reviewed reports are shown here. Reports are grouped by the conditions they ran under; a disputed group has a failure with a check against reports that it worked.</p>
+${cells.length
+    ? html`<ul class="plain cells">${cells.map(cellLine)}</ul><p>Not reported under any other conditions.</p>`
+    : html`<p class="small">No reviewed outcome reports yet.</p>`}
 ${reports.items.map((a) => html`<div class="report">
 <p class="meta">${a.kind.replace("_", " ")}${a.outcome ? html`: <strong>${a.outcome.replace("_", " ")}</strong>` : ""} · ${a.author_display_name} (<code>${a.author_id}</code>) · ${when(a.created_at)}</p>
 ${renderContributed(a.body)}
@@ -156,7 +182,7 @@ ${a.check
 ${conditionsList(a.conditions)}
 </div>`)}
 ${counts.candidate ? html`<p class="small">${counts.candidate} unreviewed report${counts.candidate === 1 ? "" : "s"} awaiting review — <a href="${revisionUrl(revisionId)}/annotations?include=candidate">inspect via the API</a>.</p>` : ""}
-${otherRevisionsReports(db, revisionId, slug)}`;
+${otherRevisionsReports(history.other_revisions, slug)}`;
 }
 
 function machineLinks(recordId: string, revisionId: string): SafeHtml {
@@ -318,6 +344,7 @@ ${papers.map((p) => `- [Paper: ${p.title}](${publicOrigin}/papers/${p.slug}.md):
 - [Published records](${publicOrigin}/api/v1/records): newest first, JSON
 - [OpenAPI 3.1 contract](${publicOrigin}/openapi.json) and [API reference](${publicOrigin}/api-docs)
 - Exact revision: ${publicOrigin}/api/v1/revisions/{revision_id} (JSON) and /markdown
+- Outcome reports on a revision, counted per outcome and grouped by the conditions they ran under (\`by_conditions\`; a group is "disputed" when a failure with a check meets reports that it worked): ${publicOrigin}/api/v1/revisions/{revision_id}/report-history
 `),
   );
 

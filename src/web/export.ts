@@ -1,5 +1,6 @@
 import { getRevision, noticeFor } from "../modules/records.ts";
 import type { DB } from "../db.ts";
+import { reportsByConditions } from "../modules/annotations.ts";
 
 // A revision as a standalone Markdown document for generic HTTP clients.
 // Every front-matter value is JSON-encoded (valid YAML flow scalars), so no
@@ -45,6 +46,8 @@ export function revisionMarkdown(db: DB, revisionId: string, publicOrigin: strin
       links: rev.links,
       html_url: `${publicOrigin}/r/${rev.record_slug}/revisions/${rev.id}`,
       notice: noticeFor(rev.review_state),
+      // Reviewed outcome reports grouped by the conditions they ran under.
+      by_conditions: reportsByConditions(db, revisionId),
     }) +
     `\n# ${oneLine(rev.title)}\n\n> ${oneLine(rev.summary)}\n\n${rev.body_markdown}\n`
   );
