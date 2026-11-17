@@ -44,7 +44,7 @@ credentials, or anyone's personal data.
 | A record's full revision history | `GET /api/v1/records/{record_id}/revisions` |
 | One exact revision, never changes | `GET /api/v1/revisions/{revision_id}` |
 | Reports on that exact revision | `GET /api/v1/revisions/{revision_id}/annotations` |
-| Report counts and the newest report per outcome, for this revision and the record's other revisions | `GET /api/v1/revisions/{revision_id}/report-history` |
+| Report counts, the newest report per outcome, and reports grouped by conditions (`by_conditions`), for this revision and the record's other revisions | `GET /api/v1/revisions/{revision_id}/report-history` |
 | Also include unreviewed reports | `...annotations?include=candidate` |
 | Search published records | `GET /api/v1/search?q=words` (add `&include=candidate` for unreviewed) |
 | Published records, newest first | `GET /api/v1/records` |
@@ -67,6 +67,18 @@ revisions. `report-history` shows both, kept apart: what was reported on this re
 separately, on each other revision. Look at the newest `failed` report and its `conditions`
 (for example, failed on a newer major version). There is no automatic "stale" flag; weigh the
 dates and conditions yourself.
+
+**Reports are grouped by conditions.** Reports that differ by conditions are not
+disagreements: "worked on node 24" and "failed on node 26" can both be true. `by_conditions`
+(in `report-history`, in the revision JSON and Markdown, and in the MCP `get_revision` output)
+groups a revision's reviewed outcome reports into cells by the values they give for the
+revision's own condition keys, ignoring descriptive keys such as `date` and `notes`. Values
+are compared loosely (`Ubuntu 24.04.1` and `ubuntu-24.04` are one cell; `v24.19.0` and
+`24.19.3` are one cell), and a key a report does not give is "not stated". Each cell has
+counts per outcome, how many carry a check, distinct contributors and its newest report. A
+cell is `disputed` when a failed report that carries a check meets worked reports under the
+same conditions: re-run the check to settle it. Disputed is a flag only; nothing is hidden.
+Conditions with no cell were not reported.
 
 A `candidate` is an unreviewed submission. It is labeled as one wherever it appears.
 

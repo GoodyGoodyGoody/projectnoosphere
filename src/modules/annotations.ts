@@ -6,6 +6,8 @@ import { annotationHash, ANNOTATION_HASH_SCHEMA } from "../hash.ts";
 import { newId } from "../ids.ts";
 import { LIMITS, OUTCOMES_NEEDING_CHECK, type AnnotationInput, type OutcomeCheck, type SourceRef } from "../schemas.ts";
 import { nowIso } from "../time.ts";
+import { groupByConditions } from "./conditions.ts";
+import { getRevision } from "./records.ts";
 
 // Every annotation targets one exact revision, fixed at creation. A report that
 // something "worked" on revision 1 never becomes a report about revision 4.
@@ -263,13 +265,21 @@ const HISTORY_MAX_REVISIONS = 20;
 interface HistoryRow {
   revision_id: string;
   report_id: string;
+  author_id: string;
   outcome: string;
   checked: number;
   conditions: string;
   created_at: string;
 }
 
-function summarizeReports(rows: HistoryRow[]) {
+// The revision's own conditions, read through the revision view (and so its
+// quarantine rule): a withheld revision has none to group by.
+function revisionConditions(db: DB, revisionId: string): Record<string, unknown> {
+  const rev = getRevision(db, revisionId).revision;
+  return "withheld" in rev ? {} : rev.conditions;
+}
+
+function summarizeReports(rows: HistoryRow[], conditions: Record<string, unknown>) {
   const outcomes: Record<string, number> = {};
   const outcomesWithCheck: Record<string, number> = {};
   // The newest reviewed report of each outcome: "last failed 2026-10-02 on
@@ -283,7 +293,26 @@ function summarizeReports(rows: HistoryRow[]) {
       latest[r.outcome] = { report_id: r.report_id, at: r.created_at, conditions: JSON.parse(r.conditions) };
     }
   }
-  return { outcomes, outcomes_with_check: outcomesWithCheck, latest };
+  const byConditions = groupByConditions(
+    conditions,
+    rows.map((r) => ({
+      report_id: r.report_id,
+      author_id: r.author_id,
+      outcome: r.outcome,
+      checked: Boolean(r.checked),
+      conditions: JSON.parse(r.conditions) as Record<string, unknown>,
+      created_at: r.created_at,
+    })),
+  );
+  return { outcomes, outcomes_with_check: outcomesWithCheck, latest, by_conditions: byConditions };
+}
+
+// This revision's reviewed outcome reports grouped by conditions, for the
+// revision's JSON and Markdown. null for a withheld (quarantined) revision.
+export function reportsByConditions(db: DB, revisionId: string) {
+  const rev = getRevision(db, revisionId).revision;
+  if ("withheld" in rev) return null;
+  return reportHistory(db, revisionId).this_revision.by_conditions;
 }
 
 export function reportHistory(db: DB, revisionId: string) {
@@ -300,7 +329,7 @@ export function reportHistory(db: DB, revisionId: string) {
   const reportsOf = (where: string, ...args: unknown[]) =>
     db
       .prepare(
-        `SELECT a.revision_id, a.id AS report_id, a.outcome, a.check_json IS NOT NULL AS checked,
+        `SELECT a.revision_id, a.id AS report_id, a.author_id, a.outcome, a.check_json IS NOT NULL AS checked,
                 a.conditions, a.created_at
            FROM annotations a
            JOIN annotation_review ar ON ar.annotation_id = a.id AND ar.state = 'reviewed'
@@ -326,13 +355,13 @@ export function reportHistory(db: DB, revisionId: string) {
       revision_id: id,
       is_current_published: id === target.current_revision_id,
       revision_created_at: created.get(id) as string,
-      ...summarizeReports(byRevision.get(id)!),
+      ...summarizeReports(byRevision.get(id)!, revisionConditions(db, id)),
     }));
   return {
     revision_id: revisionId,
     record_id: target.record_id,
     current_revision_id: target.current_revision_id,
-    this_revision: summarizeReports(own),
+    this_revision: summarizeReports(own, revisionConditions(db, revisionId)),
     other_revisions: otherRevisions,
     notice: OTHER_REVISIONS_NOTICE,
   };

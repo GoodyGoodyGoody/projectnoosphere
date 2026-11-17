@@ -43,6 +43,8 @@ th, td { border: 1px solid var(--line); padding: .3rem .5rem; text-align: left; 
   border: 1px solid var(--line); color: var(--muted); }
 .badge.reviewed { background: var(--ok-bg); color: var(--ok-fg); border-color: transparent; }
 .badge.candidate { background: var(--warn-bg); color: var(--warn-fg); border-color: transparent; }
+.badge.disputed { background: var(--bad-bg); color: var(--bad-fg); border-color: transparent; }
+ul.cells li { margin: .2rem 0; }
 dl.conditions { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem;
   font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; }
 dl.conditions dt { color: var(--muted); }

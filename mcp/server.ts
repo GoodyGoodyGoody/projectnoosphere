@@ -156,6 +156,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
         `${UNTRUSTED} This revision's review state: ${rev.review_state}.${where}\n` +
           JSON.stringify({
             notice: r.body.notice, url: `${base}/r/${rev.record_slug}/revisions/${rev.id}`, revision: rev, reports,
+            by_conditions: h.body.this_revision?.by_conditions,
             report_history: { notice: h.body.notice, this_revision: h.body.this_revision, other_revisions: h.body.other_revisions },
           }, null, 2),
       );

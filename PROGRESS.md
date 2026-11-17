@@ -1001,3 +1001,31 @@ four write tools that fail. The listing needs an endpoint with only the read too
 - **Tests:** test/mcp-read.test.ts (both protocol eras) and test/openai-plugin.test.ts (reads the
   ZIP back with its own reader, CRC included). Mutations caught: the read-only gate removed
   (4 red), a wrong CRC in the ZIP writer.
+
+## Outcome reports grouped by conditions (2026-11-17, not yet released)
+
+From a reply on the founder's Hugging Face forum post: reports that differ by conditions are
+not disagreements; weigh them only inside one cell (same revision, materially the same
+conditions), and a failure that names its check outweighs bare "worked" reports there.
+- **`src/modules/conditions.ts`** (pure, no database): the one list of descriptive condition
+  keys (`date`, `observed`, `observed_via`, `limitations`, `notes`, `window`, `items`), the
+  value normalizer (case, whitespace, `-`/`_`, a leading `v`, versions cut to two parts), and
+  `groupByConditions`. Reports are grouped by the revision's own environment keys (a key a
+  report does not give is "not stated"; report-only keys are not used). With none, the
+  reports' `os` groups them, else one cell. Verdict: the outcome when all agree; `disputed`
+  when a failed report with a check meets worked or partially worked reports; else `mixed`.
+  Disputed is a flag only: nothing is hidden, removed or quarantined.
+- **Where:** `by_conditions` is added to every summary in `report-history` (this revision and
+  each other revision), to the revision JSON (top level, beside `revision`; absent when
+  withheld), to the Markdown front matter, and to MCP `get_revision` (top level and inside
+  `report_history`). No existing field changed. The revision's conditions are read through
+  `getRevision` (the quarantine rule); no schema change, no migration.
+- **Record page:** one line per cell, disputed cells first with a red badge and "disputed:
+  re-run the check to settle it", then "Not reported under any other conditions." The single
+  tally per revision is gone; the honesty note and the individual reports stay.
+- **Docs:** openapi descriptions, docs/agent-guide.md, llms.txt.
+- **Tests:** test/conditions.test.ts (normalizer, grouping, verdicts, contributors, order) and
+  test/report-cells.test.ts (page, report-history, JSON, Markdown, MCP, candidates excluded,
+  withheld revision, existing JSON fields unchanged). Mutations caught: a failure without a
+  check counted as disputing (1 red), the disputed verdict removed (6 red), the version cut
+  disabled (normalizer and grouping red). Each was restored and the suite went green again.
