@@ -30,19 +30,28 @@ export function shouldReport(err: unknown): boolean {
 // server) or through the SDK's onerror (requests rejected before any server
 // exists, src/mcp-http.ts). The latter are prefixed "Rejected inbound request
 // (<cell>): ". Malformed or invalid requests are the client's mistake: drop them. An
-// unsupported protocol version is different: it means the endpoint is behind
-// the protocol (how PROJECTNOOSPHERE-5 was found), so keep it as a warning.
+// unsupported protocol version is different ONLY when it is newer than every
+// revision we serve: the client is ahead of us (how PROJECTNOOSPHERE-5 was
+// found), so keep it as a warning: upgrade the SDK. An older or supported
+// version (e.g. 2025-06-18 inside a 2026-style request) is a client mixing
+// protocol eras, e.g. a liveness bot: drop it.
 const FIRST_MCP_REVISION = "2024-11-05";
+// Newest protocol revision the installed SDK serves: its legacy list
+// (SUPPORTED_PROTOCOL_VERSIONS, newest 2025-11-25) and its modern list
+// (SUPPORTED_MODERN_PROTOCOL_VERSIONS, not publicly exported: 2026-07-28).
+// This module cannot import the SDK (it loads before Sentry), so
+// test/error-status.test.ts fails when the SDK's lists move past this.
+export const NEWEST_SUPPORTED_MCP_REVISION = "2026-07-28";
 export type McpTriage ="keep" | "warn" | "drop";
 export function triageMcpError(message: string): McpTriage {
   message = message.replace(/^Rejected inbound request \([^)]*\):\s*/, "");
   const unsupported = /unsupported protocol version:?\s*(\S*)/i.exec(message);
   if (unsupported) {
-    // Only a real-looking date at or after the first MCP revision can be the
+    // Only a real-looking date newer than everything we serve can be the
     // protocol moving ahead of us. Scanners send 1999-01-01 and junk
-    // (PROJECTNOOSPHERE-5): drop those.
+    // (PROJECTNOOSPHERE-5): drop those, and drop older versions.
     const v = unsupported[1]!.replace(/[^0-9-]/g, "");
-    return /^\d{4}-\d{2}-\d{2}$/.test(v) && v >= FIRST_MCP_REVISION ? "warn" : "drop";
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) && v >= FIRST_MCP_REVISION && v > NEWEST_SUPPORTED_MCP_REVISION ? "warn" : "drop";
   }
   // Input validation of the request params (zod issues, answered as JSON-RPC
   // -32603 by the SDK; PROJECTNOOSPHERE-6): the client's malformed request.

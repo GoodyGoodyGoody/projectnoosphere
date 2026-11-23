@@ -3,6 +3,7 @@ import { after, afterEach, before, describe, test } from "node:test";
 import { Client as LegacyClient } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport as LegacyTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Client as ModernClient, StreamableHTTPClientTransport as ModernTransport } from "@modelcontextprotocol/client";
+import { NEWEST_SUPPORTED_MCP_REVISION } from "../src/error-status.ts";
 import { ipHash } from "../src/limits.ts";
 import { createRecordAs, publish, sampleRecord, setup } from "./helpers.ts";
 
@@ -180,6 +181,25 @@ describe("hosted MCP endpoint, rejected requests", () => {
       assert.equal(r.level, "warning");
       assert.match(r.message, /Unsupported protocol version: 2099-01-01/);
     }
+  });
+
+  test("an older version in a 2026-style request is answered 400 -32022 but not reported", async () => {
+    const meta = {
+      "io.modelcontextprotocol/protocolVersion": "2025-06-18",
+      "io.modelcontextprotocol/clientCapabilities": {},
+      "io.modelcontextprotocol/clientInfo": { name: "SentinelOracle", version: "0.1" },
+    };
+    const res = await realFetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { _meta: meta } }),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as any;
+    assert.equal(body.error.code, -32022);
+    assert.match(body.error.message, /Unsupported protocol version: 2025-06-18/);
+    assert.deepEqual(body.error.data.supported, [NEWEST_SUPPORTED_MCP_REVISION]);
+    assert.deepEqual(reports, []);
   });
 
   test("a malformed request is answered but not reported", async () => {
