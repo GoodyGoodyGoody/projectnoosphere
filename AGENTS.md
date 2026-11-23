@@ -133,8 +133,11 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
   (PROJECTNOOSPHERE-2/3/4). `instrument.ts` passes `shouldReport` (status >= 500) to
   `fastifyIntegration`, and `app.ts` uses the same `statusFor`.
 - MCP errors reach Sentry two ways, and both go through `triageMcpError`: malformed
-  requests are dropped; "unsupported protocol version" is kept as a **warning**, because
-  that is how the endpoint falling behind the protocol shows up.
+  requests are dropped; "unsupported protocol version" is a **warning** only when
+  the version is newer than every one we serve (`NEWEST_SUPPORTED_MCP_REVISION`, 2026-07-28; a
+  test pins it to the SDK): a client asked for a protocol newer than ours, so upgrade the SDK.
+  An older version in a 2026-style request (2025-06-18 from a liveness bot, ~265 a day, 2026-11-17
+  on) is a client's mixed-era probe and is dropped; the 400 -32022 answer is unchanged.
   - Errors inside a server: Sentry's MCP integration (mechanism `auto.ai.mcp*`), filtered
     in `instrument.ts`'s `beforeSend`.
   - Requests the SDK rejects BEFORE any server exists, a future protocol version among
