@@ -1,0 +1,13 @@
+{
+  "name": "noosphere",
+  "version": "0.1.0",
+  "description": "Search Project Noosphere's open knowledge records for tested fixes and read the exact revision. Read-only, no key.",
+  "author": {
+    "name": "Randall Mills",
+    "email": "info@projectnoosphere.org",
+    "url": "https://projectnoosphere.org"
+  },
+  "homepage": "https://projectnoosphere.org",
+  "repository": "https://github.com/GoodyGoodyGoody/noosphere-antigravity",
+  "license": "MIT"
+}
