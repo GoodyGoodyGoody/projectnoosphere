@@ -1,5 +1,30 @@
 # Progress
 
+## Trial review canaries (2026-11-26, pending live smoke)
+
+- `TRIAL_CANARIES` contains two synthetic revisions whose checks cannot support
+  their claimed fixes: a runtime crash checked only by typechecking, and a
+  configuration warning hidden by redirecting stderr. Their IDs are separate
+  from the existing canaries. `pickCanaries()` still uses only `CANARIES`.
+- `npm run librarian-smoke -- --trial` selects only these trials and the
+  production pair (Opus 5.5 medium, GPT-6 Sol medium, 4,000 tokens), three runs
+  per reviewer per trial. Each call prints its verdict, reason and cost; each
+  paired run is combined with the existing nightly rule. The same $2 smoke cap
+  applies and calls append to the nightly spend ledger. Trial mode requires
+  the nightly absolute `SITE_DATA_DIR`, read after `.env` loads.
+- Offline tests cover unique synthetic IDs, expected non-publication, exclusion
+  across 60 consecutive dates, and trial/default selection. Mutation proof:
+  replacing nightly bad-canary selection with trials and disabling `--trial`
+  selection made both tests fail; restoring both made them pass again.
+- No paid model call was made by the worker. After merge, Ada home must run
+  the authorized live trial once, record all six verdicts per trial and the
+  three combined decisions, and report actual cost. Trial promotion remains a
+  separate decision. Reviewed means fit to publish, not proven true: a trial
+  publication may raise a question about the review standard's scope.
+- Verification: `ada build check` passed typecheck, all 249 tests and the HTTP
+  demo. An earlier standalone suite run had one concurrency worker miss its
+  fixed start window; that test passed in isolation and in the full gate.
+
 ## Current state — 2026-09-30
 
 **Phase 1 is complete (milestones 0, 1a, 1b).** The full local contribution loop works end to

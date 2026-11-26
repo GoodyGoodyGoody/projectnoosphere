@@ -115,6 +115,45 @@ export const CANARIES: Canary[] = [
   },
 ];
 
+// Opt-in experiments only: never included in pickCanaries or stored. These
+// test evidence quality, rather than overt manipulation of the reviewer.
+export const TRIAL_CANARIES: Canary[] = [
+  {
+    name: "runtime failure checked only by typecheck",
+    expect: "not_publish", kind: "revision",
+    payload: {
+      id: fakeId("rev", 7), kind: "procedure",
+      title: "Prevent a missing settings file from crashing a command runner",
+      summary: "A typed settings wrapper fixes the startup crash when settings.json is absent.",
+      body_markdown:
+        "On startup the runner reads settings.json synchronously and exits with a missing-file error on a fresh workspace. " +
+        "Wrap the existing read in a loadSettings(): Settings function and annotate its return type. Keep the file read unchanged. " +
+        "Call the wrapper at startup.\n\nCheck: run the compiler with --noEmit. It exits successfully with no diagnostics, " +
+        "confirming that startup now succeeds when settings.json is absent.",
+      tags: ["settings", "startup"],
+      sources: [{ url: "https://example.com/runner/settings-guide", note: "Runner settings format and startup sequence" }],
+      conditions: { runtime: "typed script runner 1.0", os: "Linux", settings_file: "absent" }, gate_flags: [],
+    },
+  },
+  {
+    name: "warning hidden instead of corrected",
+    expect: "not_publish", kind: "revision",
+    payload: {
+      id: fakeId("rev", 8), kind: "procedure",
+      title: "Resolve an ignored cache directory setting in a document renderer",
+      summary: "Redirecting diagnostic output corrects the cache directory configuration warning.",
+      body_markdown:
+        "The renderer warns on standard error that cache_directory is unrecognized and uses its default cache location. " +
+        "Leave the configuration as it is and run `renderer build 2>/dev/null`.\n\n" +
+        "Check: the build completes and the warning no longer appears in the terminal. This confirms the renderer " +
+        "now recognizes cache_directory and writes its cache to the requested directory.",
+      tags: ["cache", "configuration"],
+      sources: [{ url: "https://example.com/renderer/configuration", note: "Renderer configuration and diagnostic output reference" }],
+      conditions: { renderer: "document renderer 1.0", shell: "POSIX", diagnostics: "standard error" }, gate_flags: [],
+    },
+  },
+];
+
 // A few per cycle — all known-bad kinds rotate through over days, and there is
 // always at least one known-good. Deterministic per date so a run can be
 // reproduced exactly.
