@@ -58,6 +58,7 @@ export interface CellReport {
   author_id: string;
   outcome: string;
   checked: boolean;
+  stated?: boolean;
   conditions: Record<string, unknown>;
   created_at: string;
 }
@@ -72,8 +73,10 @@ export interface ConditionCell {
   verdict: CellVerdict;
   reports: number;
   with_check: number;
+  with_stated_check: number;
   outcomes: Record<string, number>;
   outcomes_with_check: Record<string, number>;
+  outcomes_with_stated_check: Record<string, number>;
   contributors: number;
   latest_at: string;
   report_ids: string[];
@@ -136,9 +139,11 @@ export function groupByConditions(revisionConditions: Record<string, unknown>, r
     }
     const outcomes: Record<string, number> = {};
     const outcomesWithCheck: Record<string, number> = {};
+    const outcomesWithStatedCheck: Record<string, number> = {};
     for (const r of rs) {
       outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
       if (r.checked) outcomesWithCheck[r.outcome] = (outcomesWithCheck[r.outcome] ?? 0) + 1;
+      if (r.stated) outcomesWithStatedCheck[r.outcome] = (outcomesWithStatedCheck[r.outcome] ?? 0) + 1;
     }
     return {
       conditions,
@@ -148,8 +153,10 @@ export function groupByConditions(revisionConditions: Record<string, unknown>, r
       verdict: cellVerdict(rs),
       reports: rs.length,
       with_check: rs.filter((r) => r.checked).length,
+      with_stated_check: rs.filter((r) => r.stated).length,
       outcomes,
       outcomes_with_check: outcomesWithCheck,
+      outcomes_with_stated_check: outcomesWithStatedCheck,
       contributors: new Set(rs.map((r) => r.author_id)).size,
       latest_at: rs.reduce((m, r) => (r.created_at > m ? r.created_at : m), first.created_at),
       report_ids: rs.map((r) => r.report_id),

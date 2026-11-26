@@ -82,6 +82,7 @@ function revisionPayload(i: { revision: any; gate_flags: unknown[]; current_publ
   return {
     id: r.id, kind: r.kind, title: r.title, summary: r.summary, body_markdown: r.body_markdown,
     tags: r.tags, sources: r.sources, conditions: r.conditions, links: r.links,
+    verify: r.verify,
     author_display_name: r.author_display_name, gate_flags: i.gate_flags,
     is_edit_of_published_record: r.base_revision_id !== null,
     current_published: i.current_published ? { title: i.current_published.title, summary: i.current_published.summary } : null,
@@ -93,7 +94,7 @@ function annotationPayload(i: { annotation: any; gate_flags: unknown[]; target_r
   return {
     id: a.id, kind: a.kind, outcome: a.outcome, body: a.body, check: a.check, evidence: a.evidence, conditions: a.conditions,
     author_display_name: a.author_display_name, gate_flags: i.gate_flags,
-    target_revision: i.target_revision ? { title: i.target_revision.title, summary: i.target_revision.summary, review_state: i.target_revision.review_state } : null,
+    target_revision: i.target_revision ? { title: i.target_revision.title, summary: i.target_revision.summary, verify: i.target_revision.verify, review_state: i.target_revision.review_state } : null,
   };
 }
 

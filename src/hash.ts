@@ -56,10 +56,18 @@ export interface RevisionHashInput {
   links: unknown[];
   content_license: string;
   created_at: string;
+  verify?: { run: string; expect: string } | null;
 }
 
-export function revisionHash(r: RevisionHashInput): string {
-  return sha256(canonicalJson({ schema: REVISION_HASH_SCHEMA, ...r }));
+export function revisionHashSchema(r: RevisionHashInput): string {
+  return r.verify ? "noosphere-revision/2" : REVISION_HASH_SCHEMA;
+}
+
+export function revisionHash(r: RevisionHashInput, schema: string = revisionHashSchema(r)): string {
+  const { verify, ...common } = r;
+  if (schema === "noosphere-revision/1") return sha256(canonicalJson({ schema, ...common }));
+  if (schema === "noosphere-revision/2") return sha256(canonicalJson({ schema, ...common, verify: verify ?? null }));
+  throw new Error(`unknown revision hash schema: ${schema}`);
 }
 
 export interface AnnotationHashInput {
@@ -73,12 +81,17 @@ export interface AnnotationHashInput {
   conditions: Record<string, unknown>;
   supersedes_annotation_id: string | null;
   created_at: string;
-  check?: { ran: string; observed: string } | null;
+  check?: { ran: string; observed: string; stated?: boolean } | null;
 }
 
-export function annotationHash(a: AnnotationHashInput, schema: string = ANNOTATION_HASH_SCHEMA): string {
+export function annotationHashSchema(a: AnnotationHashInput): string {
+  return a.check?.stated !== undefined ? "noosphere-annotation/3" : ANNOTATION_HASH_SCHEMA;
+}
+
+export function annotationHash(a: AnnotationHashInput, schema: string = annotationHashSchema(a)): string {
   const { check, ...common } = a;
   if (schema === "noosphere-annotation/1") return sha256(canonicalJson({ schema, ...common }));
   if (schema === "noosphere-annotation/2") return sha256(canonicalJson({ schema, ...common, check: check ?? null }));
+  if (schema === "noosphere-annotation/3") return sha256(canonicalJson({ schema, ...common, check: check ?? null }));
   throw new Error(`unknown annotation hash schema: ${schema}`);
 }

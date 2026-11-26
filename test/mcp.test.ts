@@ -36,6 +36,13 @@ describe("MCP server", () => {
     const tools = (await (await connect()).listTools()).tools;
     assert.deepEqual(tools.map((x) => x.name).sort(), ["annotate", "create_record", "get_revision", "propose_revision", "report_outcome", "search"]);
     for (const name of ["search", "get_revision"]) assert.equal(tools.find((x) => x.name === name)!.annotations?.readOnlyHint, true);
+    for (const tool of tools) assert.match(tool.description!, /Prefer running the stated check when one exists/);
+    for (const name of ["create_record", "propose_revision"]) {
+      const schema: any = tools.find((x) => x.name === name)!.inputSchema;
+      assert.deepEqual(Object.keys(schema.properties.verify.properties).sort(), ["expect", "run"]);
+    }
+    const report: any = tools.find((x) => x.name === "report_outcome")!.inputSchema;
+    assert.equal(report.properties.check.properties.stated.type, "boolean");
   });
 
   test("search returns reviewed records by default, labeled untrusted, with public URLs", async () => {
@@ -111,5 +118,32 @@ describe("MCP server", () => {
     });
     assert.equal(proposed.isError, undefined, textOf(proposed));
     assert.match(textOf(proposed), /rev_[0-9A-Z]{26}/);
+  });
+
+  test("MCP preserves the stated check, exact-run report and its separate count", async () => {
+    const client = await connect(t.a.token);
+    const verify = { run: "node probe.ts", expect: "probe prints three matching rows" };
+    const made = await client.callTool({ name: "create_record", arguments: { ...sampleRecord({ title: "Stated check via MCP", verify }) } });
+    assert.ok(!made.isError, textOf(made));
+    const rec = textOf(made).match(/rec_[0-9A-Z]{26}/)![0];
+    const rev = textOf(made).match(/rev_[0-9A-Z]{26}/)![0];
+    await publish(t.app, t.s.token, rev);
+    const report = await client.callTool({ name: "report_outcome", arguments: {
+      revision_id: rev, outcome: "worked", body: "Ran the frozen probe on the documented version and saw three matching rows.",
+      conditions: { node: "24" }, check: { ran: verify.run, observed: verify.expect, stated: true },
+    } });
+    assert.ok(!report.isError, textOf(report));
+    const ann = textOf(report).match(/ann_[0-9A-Z]{26}/)![0];
+    await t.app.inject({ method: "POST", url: "/api/v1/admin/moderation-events", headers: bearer(t.s.token), payload: { action: "approve_annotation", target_id: ann, reason: "concrete probe" } });
+    const read = textOf(await client.callTool({ name: "get_revision", arguments: { revision_id: rev } }));
+    const data = JSON.parse(read.slice(read.indexOf("\n") + 1));
+    assert.deepEqual(data.revision.verify, verify);
+    assert.equal(data.reports[0].check.stated, true);
+    assert.deepEqual(data.report_history.this_revision.outcomes_with_stated_check, { worked: 1 });
+    const proposed = await client.callTool({ name: "propose_revision", arguments: { record_id: rec, base_revision_id: rev, ...sampleRecord({ title: "A changed stated check via MCP", verify: { ...verify, run: "node probe2.ts" } }) } });
+    assert.ok(!proposed.isError, textOf(proposed));
+    const rev2 = textOf(proposed).match(/rev_[0-9A-Z]{26}/)![0];
+    const newRead = textOf(await client.callTool({ name: "get_revision", arguments: { revision_id: rev2 } }));
+    assert.equal(JSON.parse(newRead.slice(newRead.indexOf("\n") + 1)).revision.verify.run, "node probe2.ts");
   });
 });

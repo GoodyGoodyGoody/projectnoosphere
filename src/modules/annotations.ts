@@ -2,7 +2,9 @@ import type { Actor } from "../auth.ts";
 import type { DB } from "../db.ts";
 import { invalid, notFound } from "../errors.ts";
 import { refuseSecrets, scanFlags, type GateFlag } from "../gate.ts";
-import { annotationHash, ANNOTATION_HASH_SCHEMA } from "../hash.ts";
+import { annotationHash, annotationHashSchema } from "../hash.ts";
+import { isBareSuccess } from "../check.ts";
+export { isBareSuccess } from "../check.ts";
 import { newId } from "../ids.ts";
 import { LIMITS, OUTCOMES_NEEDING_CHECK, type AnnotationInput, type OutcomeCheck, type SourceRef } from "../schemas.ts";
 import { nowIso } from "../time.ts";
@@ -14,11 +16,6 @@ import { getRevision } from "./records.ts";
 
 // "It exited 0" shows that a command ran, not that the result is right. A
 // check's observed text must say what the check showed.
-const BARE_SUCCESS =
-  /^(?:(?:exit(?:ed)?|return(?:ed)?|rc|status|code)(?: with)?(?: (?:code|status))?\s*[:=]?\s*0|0|ok|okay|success(?:ful)?|succeeded|pass(?:ed)?|done|works|worked|it worked|fine|no errors?)$/i;
-export function isBareSuccess(observed: string): boolean {
-  return BARE_SUCCESS.test(observed.trim().replace(/^["'`]+|["'`.!\s]+$/g, ""));
-}
 
 function checkTexts(check: OutcomeCheck | undefined): Record<string, string> {
   return check ? { "check.ran": check.ran, "check.observed": check.observed } : {};
@@ -98,6 +95,10 @@ export function createAnnotation(
   // A quarantined revision is withheld everywhere; it does not take new reports.
   if (!target || target.state === "quarantined") throw notFound("revision");
   const flags = checkAnnotationInput(db, actor, revisionId, input);
+  const revision = getRevision(db, revisionId).revision;
+  if (input.check?.stated !== undefined && (!("verify" in revision) || !revision.verify)) {
+    throw invalid("check.stated", "allowed only when the target revision has a stated check (verify)");
+  }
 
   return db
     .transaction(() => {
@@ -110,7 +111,7 @@ export function createAnnotation(
         body: input.body,
         evidence: input.evidence ?? [],
         conditions: input.conditions ?? {},
-        check: input.check ? { ran: input.check.ran, observed: input.check.observed } : null,
+        check: input.check ? { ...input.check } : null,
         supersedes_annotation_id: input.supersedes_annotation_id ?? null,
         created_at: nowIso(),
       };
@@ -122,7 +123,7 @@ export function createAnnotation(
         fields.id, fields.revision_id, fields.author_id, fields.kind, fields.outcome,
         fields.body, JSON.stringify(fields.evidence), JSON.stringify(fields.conditions),
         fields.check ? JSON.stringify(fields.check) : null,
-        fields.supersedes_annotation_id, ANNOTATION_HASH_SCHEMA, annotationHash(fields),
+        fields.supersedes_annotation_id, annotationHashSchema(fields), annotationHash(fields),
         fields.created_at,
       );
       db.prepare(
@@ -193,14 +194,16 @@ export function getAnnotation(db: DB, annotationId: string) {
 export function reportCounts(db: DB, revisionId: string) {
   const rows = db
     .prepare(
-      `SELECT a.kind, a.outcome, a.check_json IS NOT NULL AS checked, ar.state FROM annotations a
+      `SELECT a.kind, a.outcome, a.check_json IS NOT NULL AS checked,
+              json_extract(a.check_json, '$.stated') = 1 AS stated, ar.state FROM annotations a
          JOIN annotation_review ar ON ar.annotation_id = a.id
         WHERE a.revision_id = ? AND ar.state IN ('reviewed', 'candidate')`,
     )
-    .all(revisionId) as { kind: string; outcome: string | null; checked: number; state: string }[];
+    .all(revisionId) as { kind: string; outcome: string | null; checked: number; stated: number; state: string }[];
   const outcomes: Record<string, number> = {};
   // The same tally, counting only reports that say how they were confirmed.
   const outcomesWithCheck: Record<string, number> = {};
+  const outcomesWithStatedCheck: Record<string, number> = {};
   let reviewed = 0;
   let candidate = 0;
   for (const r of rows) {
@@ -212,9 +215,10 @@ export function reportCounts(db: DB, revisionId: string) {
     if (r.kind === "outcome_report" && r.outcome) {
       outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
       if (r.checked) outcomesWithCheck[r.outcome] = (outcomesWithCheck[r.outcome] ?? 0) + 1;
+      if (r.stated) outcomesWithStatedCheck[r.outcome] = (outcomesWithStatedCheck[r.outcome] ?? 0) + 1;
     }
   }
-  return { outcomes, outcomes_with_check: outcomesWithCheck, reviewed, candidate };
+  return { outcomes, outcomes_with_check: outcomesWithCheck, outcomes_with_stated_check: outcomesWithStatedCheck, reviewed, candidate };
 }
 
 // Ordinary output shows reviewed annotations. Candidates appear only when the
@@ -263,6 +267,7 @@ export const OTHER_REVISIONS_NOTICE =
 const HISTORY_MAX_REVISIONS = 20;
 
 interface HistoryRow {
+  stated: number;
   revision_id: string;
   report_id: string;
   author_id: string;
@@ -282,12 +287,14 @@ function revisionConditions(db: DB, revisionId: string): Record<string, unknown>
 function summarizeReports(rows: HistoryRow[], conditions: Record<string, unknown>) {
   const outcomes: Record<string, number> = {};
   const outcomesWithCheck: Record<string, number> = {};
+  const outcomesWithStatedCheck: Record<string, number> = {};
   // The newest reviewed report of each outcome: "last failed 2026-10-02 on
   // node 26" is often the staleness signal itself.
   const latest: Record<string, { report_id: string; at: string; conditions: Record<string, unknown> }> = {};
   for (const r of rows) {
     outcomes[r.outcome] = (outcomes[r.outcome] ?? 0) + 1;
     if (r.checked) outcomesWithCheck[r.outcome] = (outcomesWithCheck[r.outcome] ?? 0) + 1;
+    if (r.stated) outcomesWithStatedCheck[r.outcome] = (outcomesWithStatedCheck[r.outcome] ?? 0) + 1;
     const prev = latest[r.outcome];
     if (!prev || r.created_at > prev.at || (r.created_at === prev.at && r.report_id > prev.report_id)) {
       latest[r.outcome] = { report_id: r.report_id, at: r.created_at, conditions: JSON.parse(r.conditions) };
@@ -300,11 +307,12 @@ function summarizeReports(rows: HistoryRow[], conditions: Record<string, unknown
       author_id: r.author_id,
       outcome: r.outcome,
       checked: Boolean(r.checked),
+      stated: Boolean(r.stated),
       conditions: JSON.parse(r.conditions) as Record<string, unknown>,
       created_at: r.created_at,
     })),
   );
-  return { outcomes, outcomes_with_check: outcomesWithCheck, latest, by_conditions: byConditions };
+  return { outcomes, outcomes_with_check: outcomesWithCheck, outcomes_with_stated_check: outcomesWithStatedCheck, latest, by_conditions: byConditions };
 }
 
 // This revision's reviewed outcome reports grouped by conditions, for the
@@ -330,6 +338,7 @@ export function reportHistory(db: DB, revisionId: string) {
     db
       .prepare(
         `SELECT a.revision_id, a.id AS report_id, a.author_id, a.outcome, a.check_json IS NOT NULL AS checked,
+                json_extract(a.check_json, '$.stated') = 1 AS stated,
                 a.conditions, a.created_at
            FROM annotations a
            JOIN annotation_review ar ON ar.annotation_id = a.id AND ar.state = 'reviewed'

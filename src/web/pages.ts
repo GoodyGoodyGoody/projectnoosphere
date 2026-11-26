@@ -115,6 +115,7 @@ function revisionArticle(rev: FullRevision): SafeHtml {
 <p><em>${rev.summary}</em></p>
 <div class="notice${rev.review_state === "candidate" ? " candidate" : ""}">${noticeFor(rev.review_state)}</div>
 ${renderContributed(rev.body_markdown)}
+${rev.verify ? html`<h2>Stated check</h2><p><strong>Run:</strong></p><pre><code>${rev.verify.run}</code></pre><p><strong>Expect:</strong> ${rev.verify.expect}</p>` : ""}
 ${Object.keys(rev.conditions).length ? html`<h2>Conditions</h2>${conditionsList(rev.conditions)}` : ""}
 ${rev.sources.length ? html`<h2>Sources</h2><ul>${rev.sources.map(sourceItem)}</ul>` : ""}
 ${rev.tags.length ? html`<p class="meta">Tags: ${rev.tags.map((t, i) => html`${i ? ", " : ""}<code>${t}</code>`)}</p>` : ""}
@@ -157,10 +158,12 @@ function checkNote(n: number, checked: number): string {
 function cellLine(c: Cell): SafeHtml {
   const tally = Object.entries(c.outcomes).map(([o, n], i) =>
     html`${i ? ", " : ""}${o.replace("_", " ")} ${n} (${checkNote(n, c.outcomes_with_check[o] ?? 0)})`);
+  const statedTally = Object.entries(c.outcomes).map(([o], i) =>
+    html`${i ? ", " : ""}${o.replace("_", " ")}: ${c.outcomes_with_stated_check[o] ?? 0} ran the stated check`);
   const who = html`${c.contributors} contributor${c.contributors === 1 ? "" : "s"}, newest ${when(c.latest_at)}`;
   return c.verdict === "disputed"
-    ? html`<li class="disputed"><span class="badge disputed">disputed</span> ${c.label}: ${tally} · <strong>disputed: re-run the check to settle it</strong> <span class="small">(${who})</span></li>`
-    : html`<li>${c.label}: ${tally} · ${CELL_VERDICT[c.verdict] ?? c.verdict} <span class="small">(${who})</span></li>`;
+    ? html`<li class="disputed"><span class="badge disputed">disputed</span> ${c.label}: ${tally} · <strong>disputed: re-run the check to settle it</strong> · ${statedTally} <span class="small">(${who})</span></li>`
+    : html`<li>${c.label}: ${tally} · ${CELL_VERDICT[c.verdict] ?? c.verdict} · ${statedTally} <span class="small">(${who})</span></li>`;
 }
 
 function reportsSection(db: DB, revisionId: string, slug: string): SafeHtml {
@@ -177,7 +180,7 @@ ${reports.items.map((a) => html`<div class="report">
 <p class="meta">${a.kind.replace("_", " ")}${a.outcome ? html`: <strong>${a.outcome.replace("_", " ")}</strong>` : ""} · ${a.author_display_name} (<code>${a.author_id}</code>) · ${when(a.created_at)}</p>
 ${renderContributed(a.body)}
 ${a.check
-    ? html`<p class="small"><strong>Check:</strong> <code>${a.check.ran}</code><br><strong>It showed:</strong> ${a.check.observed}</p>`
+    ? html`<p class="small"><strong>Check:</strong> <code>${a.check.ran}</code><br><strong>It showed:</strong> ${a.check.observed}${a.check.stated !== undefined ? html`<br>${a.check.stated ? "Reported running the stated check exactly as written." : "Did not run the stated check exactly as written."}` : ""}</p>`
     : a.kind === "outcome_report" ? html`<p class="small">No check attached.</p>` : ""}
 ${conditionsList(a.conditions)}
 </div>`)}

@@ -2,10 +2,11 @@ import type { Actor } from "../auth.ts";
 import type { DB } from "../db.ts";
 import { conflict, invalid, notFound } from "../errors.ts";
 import { duplicateOf, refuseSecrets, scanFlags, type GateFlag } from "../gate.ts";
-import { revisionHash, REVISION_HASH_SCHEMA } from "../hash.ts";
+import { revisionHash, revisionHashSchema } from "../hash.ts";
+import { isBareSuccess } from "../check.ts";
 import { newId } from "../ids.ts";
 import { moderationLog } from "./log.ts";
-import type { ProposalInput, RevisionInput, SourceRef } from "../schemas.ts";
+import type { ProposalInput, RevisionInput, RevisionVerify, SourceRef } from "../schemas.ts";
 import { nowIso } from "../time.ts";
 
 // ---- trust notice -----------------------------------------------------------
@@ -71,6 +72,10 @@ function revisionTexts(input: RevisionInput): Record<string, string> {
     summary: input.summary,
     body_markdown: input.body_markdown,
   };
+  if (input.verify) {
+    t["verify.run"] = input.verify.run;
+    t["verify.expect"] = input.verify.expect;
+  }
   (input.tags ?? []).forEach((tag, i) => (t[`tags[${i}]`] = tag));
   (input.sources ?? []).forEach((s, i) => {
     t[`sources[${i}].note`] = s.note;
@@ -91,12 +96,15 @@ function revisionTexts(input: RevisionInput): Record<string, string> {
 function checkRevisionInput(db: DB, input: RevisionInput): GateFlag[] {
   const texts = revisionTexts(input);
   refuseSecrets(texts);
+  if (input.verify && (!input.verify.run.trim() || !input.verify.expect.trim() || isBareSuccess(input.verify.expect))) {
+    throw invalid("verify", "state the check to run and an observable expected result; an exit code alone does not show the result");
+  }
   if (input.kind === "claim" && (input.sources ?? []).length === 0) {
     throw invalid("sources", "a claim must cite at least one source");
   }
   assertRevisionRefsExist(db, input.sources ?? [], "sources");
   assertRevisionRefsExist(db, input.links ?? [], "links");
-  const flags = scanFlags({ title: input.title, summary: input.summary, body_markdown: input.body_markdown });
+  const flags = scanFlags(texts);
   const dup = duplicateOf(db, input.title, input.body_markdown);
   if (dup) flags.push({ code: "duplicate", field: "body_markdown", message: `same title and body as ${dup}` });
   return flags;
@@ -228,19 +236,21 @@ function insertRevision(
     links: r.input.links ?? [],
     content_license: r.content_license,
     created_at: r.created_at,
+    ...(r.input.verify ? { verify: r.input.verify } : {}),
   };
   const content_hash = revisionHash(fields);
   db.prepare(
     `INSERT INTO revisions (id, record_id, base_revision_id, parent_revision_id, author_id,
        kind, title, summary, body_markdown, tags, sources, conditions, links,
-       content_license, hash_schema, content_hash, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       content_license, hash_schema, content_hash, created_at, verify_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     fields.id, fields.record_id, fields.base_revision_id, fields.parent_revision_id,
     fields.author_id, fields.kind, fields.title, fields.summary, fields.body_markdown,
     JSON.stringify(fields.tags), JSON.stringify(fields.sources),
     JSON.stringify(fields.conditions), JSON.stringify(fields.links),
-    fields.content_license, REVISION_HASH_SCHEMA, content_hash, fields.created_at,
+    fields.content_license, revisionHashSchema(fields), content_hash, fields.created_at,
+    fields.verify ? JSON.stringify(fields.verify) : null,
   );
   db.prepare(
     "INSERT INTO revision_review (revision_id, state, reason, updated_at, gate_flags) VALUES (?, 'candidate', NULL, ?, ?)",
@@ -250,6 +260,7 @@ function insertRevision(
 // ---- reads and representations ------------------------------------------------
 
 interface RevisionRow {
+  verify_json: string | null;
   id: string;
   record_id: string;
   record_slug: string;
@@ -316,6 +327,7 @@ export function revisionView(row: RevisionRow) {
     sources: JSON.parse(row.sources) as SourceRef[],
     conditions: JSON.parse(row.conditions) as Record<string, unknown>,
     links: JSON.parse(row.links) as unknown[],
+    verify: row.verify_json ? JSON.parse(row.verify_json) as RevisionVerify : null,
     content_license: row.content_license,
     hash_schema: row.hash_schema,
     content_hash: row.content_hash,
