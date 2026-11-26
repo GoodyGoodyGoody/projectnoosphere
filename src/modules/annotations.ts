@@ -53,6 +53,9 @@ function checkAnnotationInput(db: DB, actor: Actor, revisionId: string, input: A
     if (input.check && isBareSuccess(input.check.observed)) {
       throw invalid("check.observed", "say what the check showed, not only that it succeeded: an exit code alone does not show the result");
     }
+    if (input.check && (!input.check.ran.trim() || !input.check.observed.trim())) {
+      throw invalid("check", "say what you ran and what it showed; check fields cannot be blank");
+    }
   } else if (input.outcome !== undefined) {
     throw invalid("outcome", "only an outcome_report carries an outcome");
   } else if (input.check !== undefined) {

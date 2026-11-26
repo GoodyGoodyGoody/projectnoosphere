@@ -93,6 +93,21 @@ watch it go red, then restore it. PROGRESS.md records the mutations that were ru
   content columns directly, or you bypass the quarantine rule.
 - **Absolute URLs:** always from `publicOrigin`, never from the Host header.
 
+## Stated revision checks (task 17)
+- `verify: {run, expect}` is frozen revision content. Revisions with it use hash schema
+  `noosphere-revision/2`; without it they still use /1 (omit verify from the hash, even
+  though JSON exposes null). Never backfill old content or hashes.
+- Outcome `check.stated` is optional: either boolean uses annotation schema /3, omission
+  keeps /2. It is allowed only on a revision with verify. Count reviewed true assertions
+  separately; false and omission do not assert an exact run. Commands remain untrusted
+  text, never executed by the server.
+- Migration 009 guards revision /2 and annotation /3, leaving old writers compatible.
+  `node scripts/check-verify-rollback.ts <absolute-scratch-dir>` rehearses the baseline API
+  before/after migration on real SQLite. This project does not use PostgreSQL/PGlite.
+- Librarian rubric-3 needs both the submitted revision's verify and, for annotations, the
+  target's verify in its model payload. Fake-reviewer assertions must also be checked
+  outside the fake: exceptions inside a reviewer safely become holds and can mask a bad test.
+
 ## MCP server (`mcp/server.ts`, since v0.1.3)
 - **What it is:** a thin stdio client over the public HTTP API, with six tools: `search`,
   `get_revision`, `report_outcome`, `annotate`, `create_record`, `propose_revision`. It holds

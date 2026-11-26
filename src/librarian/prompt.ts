@@ -32,7 +32,7 @@ feedback asking what the check actually showed. Older reports without a check pr
 
 A revision may state its own frozen check in "verify": "run" gives the exact command or steps and "expect" gives
 observable success. Hold a revision whose verify cannot observe the result the revision claims; ask for a check that can.
-Prefer running the stated check when one exists. In an outcome report, check.stated means the reporter says whether they
+In an outcome report, check.stated means the reporter says whether they
 ran that exact stated check. Hold a report with stated: true whose ran text clearly differs from the target revision's
 verify.run; ask them to run it exactly or say stated: false. Omitted stated is unknown, never an assertion of exactness.
 

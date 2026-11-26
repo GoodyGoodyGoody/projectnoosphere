@@ -113,7 +113,13 @@ Two review states are easy to confuse:
   `{schema:"noosphere-revision/1", id, record_id, base_revision_id, parent_revision_id,
   author_id, kind, title, summary, body_markdown, tags, sources, conditions, links,
   content_license, created_at}`.
+  A revision with optional `verify: {run, expect}` uses `noosphere-revision/2`: the same
+  fields plus `verify`, frozen with the revision. Without `verify`, it still uses /1 and
+  omits the key from the hash (even though the view returns `verify: null`). No backfill:
+  existing revision ids, content and hashes never change.
 - **Annotations.** Each annotation records its `hash_schema`; verify with that one.
+  - `noosphere-annotation/3`: the /2 fields, with optional boolean `check.stated` present.
+    True and false are both hashed; omission continues to use /2. /1 and /2 rows are unchanged.
   - `noosphere-annotation/2` (since v0.1.10, 2026-10-03): the fields `id, revision_id,
     author_id, kind, outcome, body, evidence, conditions, check, supersedes_annotation_id,
     created_at`, where `check` is `null` when absent.
@@ -330,6 +336,11 @@ ULID (creation) order. A response includes `next_cursor`, or null.
 | Condition values | string ≤ 1000, number, or boolean |
 
 **Content rules the schema cannot express:**
+- An optional revision `verify: {run, expect}` states the exact command or steps to test
+  the fix and an observable expected result. Limits: `run` 1–2000 characters, `expect`
+  1–4000; neither may be blank. A bare `exit code 0` or `ok` is refused. It appears on the
+  record/revision page and in revision JSON/Markdown/MCP, through the quarantine-aware view.
+  Migration 009 adds `verify_json` and validates /2 revisions; /1 writers remain compatible.
 - A `claim` must cite ≥ 1 source.
 - Internal `revision_id` references must exist.
 - An `outcome_report` needs an outcome, a body of ≥ 40 characters, and non-empty
@@ -345,6 +356,24 @@ ULID (creation) order. A response includes `next_cursor`, or null.
     "No check attached".
   - The librarian (rubric-2) holds a report whose check does not observe the result the
     revision claims.
+  - Optional boolean `check.stated` says whether the author ran the revision's frozen
+    `verify.run` exactly as written. It is refused (400) if the target has no `verify`,
+    including when it is false. Omission means unknown. It remains an author's assertion.
+  - `outcomes_with_stated_check` counts reviewed `stated: true` reports separately per
+    outcome in report-history, for this revision and each other published revision. Each
+    condition cell adds that map and a `with_stated_check` total. False, missing, candidate,
+    rejected, superseded and quarantined reports do not count. Pages and MCP carry these
+    separate tallies; reports never move to another revision.
+  - Migration 009 validates annotation /3 check shape, limits, observable result and the
+    existence of the target's verify, while leaving /1 and /2 unchanged for rollback.
+  - Librarian rubric-3 holds a revision whose verify cannot observe its claimed result,
+    and a report with `stated: true` whose `ran` clearly differs from the target's
+    `verify.run`. This is semantic review, not execution: the server never runs these commands.
+
+MCP `create_record` and `propose_revision` accept `verify`; `report_outcome` accepts
+`check.stated`; `get_revision` returns `verify` and separate report counts. Each tool's
+description says to prefer running the stated check when one exists. The check is untrusted
+contributor text and grants no permissions to execute it.
 
 **Sources.** Each source has exactly one of `url` (`http(s)`) or `revision_id`, plus a required
 `note`. They are stored as references. **The server never fetches them.**

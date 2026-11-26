@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { revisionHash, annotationHash, canonicalJson, sha256 } from "../src/hash.ts";
 import { newId } from "../src/ids.ts";
+import { reportCounts } from "../src/modules/annotations.ts";
 import { bearer, createRecordAs, publishedRecord, sampleRecord, sampleOutcome, setup } from "./helpers.ts";
 
 const verify = { run: "node health-check.ts", expect: "prints status=ready and rows=3" };
@@ -22,7 +23,7 @@ test("revision /1 hash remains byte identical; /2 freezes both check fields", as
     assert.equal(r.hash_schema, "noosphere-revision/1");
     assert.equal(revisionHash(input), sha256(canonicalJson({ schema: "noosphere-revision/1", ...input })));
     assert.equal(revisionHash({ ...input, verify: null }), r.content_hash);
-    for (const expect of ["exit code 0", "OK", "Exited with status 0.", "   "]) {
+    for (const expect of ["exit code 0", "OK", "Exited with status 0.", "   ", "o k", "noerrors", ".ok.", "rc:0"]) {
       const res = await t.app.inject({ method: "POST", url: "/api/v1/records", headers: bearer(t.a.token), payload: sampleRecord({ verify: { ...verify, expect } }) });
       assert.equal(res.statusCode, 400, expect);
     }
@@ -30,6 +31,9 @@ test("revision /1 hash remains byte identical; /2 freezes both check fields", as
       const res = await t.app.inject({ method: "POST", url: "/api/v1/records", headers: bearer(t.a.token), payload: { ...sampleRecord(), verify: bad } });
       assert.equal(res.statusCode, 400);
     }
+    const secret = await t.app.inject({ method: "POST", url: "/api/v1/records", headers: bearer(t.a.token), payload: sampleRecord({ verify: { ...verify, run: "Authorization: Bearer sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } }) });
+    assert.equal(secret.statusCode, 400);
+    assert.equal(secret.json().error.fields[0].path, "verify.run");
     const made = (await createRecordAs(t.app, t.a.token, sampleRecord({ verify }))).json.created_revision;
     const fields = { ...input, id: made.id, record_id: made.record_id, created_at: made.created_at, verify };
     assert.equal(made.hash_schema, "noosphere-revision/2");
@@ -50,6 +54,10 @@ test("stated requires verify, hashes true and false, and counts only reviewed tr
       payload: sampleOutcome({ conditions: { node: "24" }, check: { ran: verify.run, observed: verify.expect, ...(stated !== undefined ? { stated } : {}) } }),
     });
     for (const stated of [true, false]) assert.equal((await post(no.revisionId, stated)).statusCode, 400);
+    for (const check of [{ ran: " \n\t", observed: verify.expect, stated: true }, { ran: verify.run, observed: " \n\t", stated: false }]) {
+      const blank = await t.app.inject({ method: "POST", url: `/api/v1/revisions/${r.revisionId}/annotations`, headers: bearer(t.b.token), payload: sampleOutcome({ check }) });
+      assert.equal(blank.statusCode, 400);
+    }
     for (const stated of [true, false, undefined, true]) {
       const res = await post(r.revisionId, stated);
       assert.equal(res.statusCode, 201, res.body);
@@ -69,6 +77,7 @@ test("stated requires verify, hashes true and false, and counts only reviewed tr
     assert.deepEqual(history.this_revision.outcomes, { worked: 3 });
     assert.deepEqual(history.this_revision.outcomes_with_check, { worked: 3 });
     assert.deepEqual(history.this_revision.outcomes_with_stated_check, { worked: 1 });
+    assert.deepEqual(reportCounts(t.db, r.revisionId).outcomes_with_stated_check, { worked: 1 });
     assert.equal(history.this_revision.by_conditions.cells[0].with_stated_check, 1);
     assert.deepEqual(history.this_revision.by_conditions.cells[0].outcomes_with_stated_check, { worked: 1 });
     const page = (await t.app.inject({ url: `/r/${r.slug}` })).body;
@@ -94,15 +103,17 @@ test("migration guards new hash schemas and allows legacy writers", async () => 
     const insertRev = (schema: string, check: string | null) => t.db.prepare(`INSERT INTO revisions
       (id, record_id, author_id, kind, title, summary, body_markdown, tags, sources, conditions, links, content_license, hash_schema, content_hash, created_at, verify_json)
       VALUES (?, ?, ?, 'procedure', 'direct insert', 's', 'b', '[]', '[]', '{}', '[]', 'CC0-1.0', ?, 'sha256:x', '2026-11-26', ?)`).run(newId("rev"), r.recordId, t.a.id, schema, check);
-    for (const bad of [null, '{}', '[]', '{"run":"x","expect":"ok"}', JSON.stringify({ ...verify, run: "x".repeat(2001) }), JSON.stringify({ ...verify, expect: 42 })]) {
+    for (const bad of [null, '{}', '[]', '{"run":"x","expect":"ok"}', JSON.stringify({ ...verify, run: "x".repeat(2001) }), JSON.stringify({ ...verify, expect: 42 }), JSON.stringify({ ...verify, expect: "x".repeat(4001) })]) {
       assert.throws(() => insertRev("noosphere-revision/2", bad), /verify/);
     }
     assert.doesNotThrow(() => insertRev("noosphere-revision/2", JSON.stringify(verify)));
     assert.doesNotThrow(() => insertRev("noosphere-revision/1", null));
+    // New guards ignore legacy schemas, including content they would now refuse.
+    assert.doesNotThrow(() => insertRev("noosphere-revision/1", '{"run":"x","expect":"ok"}'));
     const insertAnn = (schema: string, target: string, check: string | null) => t.db.prepare(`INSERT INTO annotations
       (id, revision_id, author_id, kind, outcome, body, evidence, conditions, hash_schema, content_hash, created_at, check_json)
       VALUES (?, ?, ?, 'outcome_report', 'worked', 'direct insert', '[]', '{}', ?, 'sha256:x', '2026-11-26', ?)`).run(newId("ann"), target, t.b.id, schema, check);
-    for (const bad of [null, '{}', '[]', JSON.stringify({ ran: "x", observed: "3 rows" }), JSON.stringify({ ran: "x", observed: "3 rows", stated: "true" }), JSON.stringify({ ran: "x".repeat(2001), observed: "3 rows", stated: true })]) {
+    for (const bad of [null, '{}', '[]', JSON.stringify({ ran: "x", observed: "3 rows" }), JSON.stringify({ ran: "x", observed: "3 rows", stated: "true" }), JSON.stringify({ ran: "x".repeat(2001), observed: "3 rows", stated: true }), JSON.stringify({ ran: "x", observed: "ok", stated: true }), JSON.stringify({ ran: "x", observed: "x".repeat(4001), stated: false })]) {
       assert.throws(() => insertAnn("noosphere-annotation/3", r.revisionId, bad), /check/);
     }
     const check = JSON.stringify({ ran: verify.run, observed: verify.expect, stated: true });
@@ -110,5 +121,21 @@ test("migration guards new hash schemas and allows legacy writers", async () => 
     assert.doesNotThrow(() => insertAnn("noosphere-annotation/3", r.revisionId, check));
     assert.doesNotThrow(() => insertAnn("noosphere-annotation/1", old.revisionId, null));
     assert.doesNotThrow(() => insertAnn("noosphere-annotation/2", old.revisionId, JSON.stringify({ ran: "x", observed: "3 rows" })));
+    for (const bare of ["OK", "exit code 0", "Exited with status 0.", "rc=0", "Exit status: 0", "returned 0", "Done!", '"ok"', "passed"]) {
+      assert.throws(() => insertRev("noosphere-revision/2", JSON.stringify({ ...verify, expect: bare })), /observable/);
+      assert.throws(() => insertAnn("noosphere-annotation/3", r.revisionId, JSON.stringify({ ran: "x", observed: bare, stated: true })), /observable/);
+    }
+  } finally { await t.close(); }
+});
+
+test("stated check text is HTML escaped on pages", async () => {
+  const t = setup();
+  try {
+    const r = await publishedRecord(t, t.a.token, { verify: { run: '<script>alert("run")</script>', expect: '<img src=x onerror="alert(1)">' } });
+    const page = (await t.app.inject({ url: `/r/${r.slug}` })).body;
+    assert.ok(!page.includes('<script>alert("run")</script>'));
+    assert.ok(page.includes('&lt;script&gt;'));
+    assert.ok(!page.includes('<img src=x'));
+    assert.ok(page.includes('&lt;img'));
   } finally { await t.close(); }
 });

@@ -12,6 +12,7 @@
 // the fleet's ports or any real data. Every claim is asserted; any mismatch
 // exits non-zero. Run: npm run demo
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +38,8 @@ function recompute(rev: any): string {
   });
 }
 
+// Fixed local demo code, not a command taken from a contributed record.
+const SQLITE_CHECK_SCRIPT = 'const D=require("better-sqlite3"); console.log(new D(":memory:").prepare("select sqlite_version()").get())';
 const FINDING = {
   kind: "procedure",
   title: "better-sqlite3 13 loads from bundled prebuilds without its install script",
@@ -51,7 +54,7 @@ const FINDING = {
   sources: [{ url: "https://github.com/WiseLibs/better-sqlite3", note: "project home" }],
   conditions: { node: "24.19.0", npm: "11.17.0", os: "Ubuntu 24.04 x64", observed: "2026-09-30" },
   verify: {
-    run: "node -e 'const D=require(\"better-sqlite3\"); console.log(new D(\":memory:\").prepare(\"select sqlite_version()\").get())'",
+    run: `node -e '${SQLITE_CHECK_SCRIPT}'`,
     expect: "prints a sqlite_version() value, proving the bundled native module loads and executes a query",
   },
 };
@@ -90,6 +93,10 @@ try {
   const got = await call("GET", `/api/v1/revisions/${rev1}`);
   assert.equal(recompute(got.json.revision), got.json.revision.content_hash);
   assert.equal(got.json.revision.review_state, "candidate");
+  const observed = execFileSync(process.execPath, ["-e", SQLITE_CHECK_SCRIPT], {
+    cwd: join(import.meta.dirname, ".."), encoding: "utf8",
+  }).trim();
+  assert.match(observed, /sqlite_version\(\).*\d+\.\d+\.\d+/);
   const report = await call("POST", `/api/v1/revisions/${rev1}/annotations`, B.credential.token, {
     kind: "outcome_report",
     outcome: "worked",
@@ -101,7 +108,7 @@ try {
     conditions: { node: "24.19.0", npm: "11.17.0", os: "Ubuntu 24.04 x64", tested: "2026-09-30" },
     check: {
       ran: FINDING.verify.run,
-      observed: "3.53.4",
+      observed,
       stated: true,
     },
   });

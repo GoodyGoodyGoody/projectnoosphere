@@ -207,11 +207,12 @@ test("rubric-3 sends frozen checks and exact-run assertions to fake reviewers an
     const report = await t.app.inject({ method: "POST", url: `/api/v1/revisions/${good.revisionId}/annotations`, headers: bearer(t.b.token), payload: sampleOutcome({ check: { ran: "tsc --noEmit", observed: "the compiler emits no diagnostics", stated: true } }) });
     assert.equal(report.statusCode, 201);
     const reportId = report.json().annotation.id;
+    const payloadOf = (user: string) => JSON.parse(user.slice(user.indexOf("\n") + 1, user.lastIndexOf("\n</submission>")));
     // This checks the prompt contract and transport of the evidence, not a paid model's judgment.
     const decide = (input: ReviewInput) => {
       assert.match(input.system, /Hold a revision whose verify cannot observe the result/);
       assert.match(input.system, /Hold a report with stated: true whose ran text clearly differs/);
-      const payload = JSON.parse(input.user.split(">\n")[1]!.split("\n</submission>")[0]!);
+      const payload = payloadOf(input.user);
       if (payload.id === bad.revisionId) {
         assert.equal(payload.verify.run, "tsc --noEmit");
         assert.equal(payload.verify.expect, "the compiler emits no diagnostics");
@@ -236,10 +237,24 @@ test("rubric-3 sends frozen checks and exact-run assertions to fake reviewers an
     assert.equal(result.spendRunUsd, 0);
     assert.equal(primary.calls.length, 2);
     assert.equal(second.calls.length, 2);
+    // Assert outside the fake too: reviewer exceptions become safe holds, so
+    // assertions inside a fake alone would let missing context pass unnoticed.
+    for (const call of [...primary.calls, ...second.calls]) {
+      assert.match(call.system, /Hold a revision whose verify cannot observe the result/);
+      assert.match(call.system, /Hold a report with stated: true whose ran text clearly differs/);
+      const payload = payloadOf(call.user);
+      if (payload.id === bad.revisionId) assert.equal(payload.verify.run, "tsc --noEmit");
+      else {
+        assert.equal(payload.id, reportId);
+        assert.equal(payload.check.stated, true);
+        assert.equal(payload.target_revision.verify.run, "node start.ts --without-settings");
+      }
+    }
     for (const id of [bad.revisionId, reportId]) {
-      const event = t.db.prepare("SELECT action, rubric_version FROM moderation_events WHERE target_id = ?").get(id) as any;
+      const event = t.db.prepare("SELECT action, rubric_version, reason FROM moderation_events WHERE target_id = ?").get(id) as any;
       assert.equal(event.rubric_version, "rubric-3");
       assert.match(event.action, /^hold_/);
+      assert.match(event.reason, /fake\/checks-a: hold.*fake\/checks-b: hold/);
     }
   } finally { await t.close(); }
 });
