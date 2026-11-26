@@ -1,5 +1,27 @@
 # Progress
 
+## Trial canaries promoted to nightly rotation (2026-11-26)
+
+- The live trial held both evidence-quality canaries in all 12 reviews (both
+  production reviewers, both trials, three runs); reported cost was $0.098.
+  Both entries now belong to `CANARIES`, with their original payloads, IDs and
+  `not_publish` expectations. The pool is eight: six bad and two good.
+- `pickCanaries()` is unchanged: two bad and one good per cycle, with the same
+  nightly call count. `TRIAL_CANARIES` remains exported with its comment and
+  is empty. `librarian-smoke --trial` exits successfully with a nothing-to-run
+  message before loading credentials or creating reviewers or a spend ledger.
+- Tests cover both promoted names appearing over 60 consecutive dates, two
+  bad and one good in every selection, unique IDs across both sets, and an
+  empty trial selection scheduling zero calls. Current paper counts now match;
+  historical six-canary trial results below remain historical measurements.
+- Mutation proof: restricting nightly selection to the original four bad
+  kinds failed the promoted-name test; duplicating ID 7 as ID 1 failed the
+  uniqueness test; selecting the main pool for `--trial` failed the empty-call
+  test. Restoring each mutation returned all three focused tests to green.
+- No paid model calls were made by this worker. After shipping, Ada must check
+  the next 03:20 UTC nightly run for no canary alarm, and confirm a promoted
+  kind was held on a night when it is selected.
+
 ## Trial review canaries (2026-11-26, pending live smoke)
 
 - `TRIAL_CANARIES` contains two synthetic revisions whose checks cannot support
