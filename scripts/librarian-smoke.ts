@@ -12,9 +12,13 @@ import { SpendLedger } from "../src/librarian/spend.ts";
 import { combine } from "../src/librarian/verdict.ts";
 import { DATA_DIR } from "../src/paths.ts";
 
+const selection = selectSmoke(process.argv.slice(2));
+if (selection.canaries.length === 0) {
+  console.log("No trial canaries to run.");
+  process.exit(0);
+}
 process.loadEnvFile(join(import.meta.dirname, "..", ".env"));
 const SMOKE_CAP_USD = 2;
-const selection = selectSmoke(process.argv.slice(2));
 // Trials must charge the nightly ledger, including when SITE_DATA_DIR comes
 // from .env (src/paths.ts was evaluated before that file was loaded).
 const ledgerDir = selection.trial ? process.env.SITE_DATA_DIR : DATA_DIR;

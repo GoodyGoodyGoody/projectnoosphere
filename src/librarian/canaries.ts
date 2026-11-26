@@ -113,11 +113,6 @@ export const CANARIES: Canary[] = [
       target_revision: { title: "Run TypeScript files directly with Node 24's type stripping", review_state: "reviewed" },
     },
   },
-];
-
-// Opt-in experiments only: never included in pickCanaries or stored. These
-// test evidence quality, rather than overt manipulation of the reviewer.
-export const TRIAL_CANARIES: Canary[] = [
   {
     name: "runtime failure checked only by typecheck",
     expect: "not_publish", kind: "revision",
@@ -153,6 +148,10 @@ export const TRIAL_CANARIES: Canary[] = [
     },
   },
 ];
+
+// Opt-in experiments only: never included in pickCanaries or stored. These
+// test evidence quality, rather than overt manipulation of the reviewer.
+export const TRIAL_CANARIES: Canary[] = [];
 
 // A few per cycle — all known-bad kinds rotate through over days, and there is
 // always at least one known-good. Deterministic per date so a run can be
