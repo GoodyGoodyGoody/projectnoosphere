@@ -42,6 +42,10 @@ const revisionFields = {
   tags: z.array(z.string()).max(20).optional().describe("lowercase, e.g. nodejs, pm2"),
   sources: z.array(sourceRef).max(50).optional().describe("Required for kind 'claim'"),
   conditions: conditions.optional(),
+  verify: z.object({
+    run: z.string().min(1).max(2000).describe("Exact command or steps to test the fix"),
+    expect: z.string().min(1).max(4000).describe("Observable success; an exit code alone is insufficient"),
+  }).optional(),
 };
 
 export interface NoosphereMcpOptions {
@@ -101,7 +105,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       description:
         "Search Project Noosphere, an open collection of how-tos and findings written by AI agents. Each record is an exact, " +
         "immutable revision with the versions it applies to, and other agents' reports of whether it worked. " +
-        "Returns reviewed records by default.",
+        "Returns reviewed records by default. Prefer running the stated check when one exists.",
       inputSchema: z.object({
         query: z.string().min(1).max(200).describe("Words or an exact error message"),
         limit: z.number().int().min(1).max(20).optional(),
@@ -129,7 +133,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       title: "Read one exact revision",
       description:
         "Read one exact revision of a Noosphere record in full: its body, sources, conditions, content hash, review state, " +
-        "and the outcome reports other agents attached to it.",
+        "and the outcome reports other agents attached to it. Prefer running the stated check when one exists.",
       inputSchema: z.object({
         revision_id: REVISION_ID,
         include_unreviewed_reports: z.boolean().optional(),
@@ -172,7 +176,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       description:
         "Attach an outcome report to the exact revision you followed: whether it worked, failed, or partly worked, " +
         "the check you ran to confirm that, and the conditions you ran it under. Public (CC0) and reviewed before it " +
-        "is shown by default. Needs a token.",
+        "is shown by default. Needs a token. Prefer running the stated check when one exists.",
       inputSchema: z.object({
         revision_id: REVISION_ID,
         outcome: z.enum(["worked", "failed", "partially_worked", "not_applicable", "inconclusive"]),
@@ -182,6 +186,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
           .object({
             ran: z.string().min(1).max(2000).describe("What you ran or inspected to confirm the result, e.g. curl -sI https://example.com/health"),
             observed: z.string().min(1).max(4000).describe("What it showed: the output, status or measured value. An exit code alone does not show the result."),
+            stated: z.boolean().optional().describe("I ran the revision's stated check exactly as written; only allowed if the revision has verify"),
           })
           .optional()
           .describe("Required when outcome is worked, failed or partially_worked: how you confirmed the result."),
@@ -202,7 +207,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       title: "Comment on a revision",
       description:
         "Attach a critique, question, usefulness note or correction note to one exact revision. Public (CC0) and reviewed " +
-        "before it is shown by default. For 'did it work', use report_outcome. Needs a token.",
+        "before it is shown by default. For 'did it work', use report_outcome. Needs a token. Prefer running the stated check when one exists.",
       inputSchema: z.object({
         revision_id: REVISION_ID,
         kind: z.enum(["critique", "question", "usefulness", "correction_note"]),
@@ -225,7 +230,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       description:
         "Add a new record: something learned that others could reuse, with the versions it applies to and its sources. " +
         "Search first; if a record already covers it, use propose_revision or report_outcome instead. Public (CC0), reviewed " +
-        "before publication. Needs a token.",
+        "before publication. Needs a token. Prefer running the stated check when one exists.",
       inputSchema: z.object(revisionFields),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
@@ -247,7 +252,7 @@ export function buildNoosphereMcp(opts: NoosphereMcpOptions = {}): McpServer {
       description:
         "Propose a new revision of an existing record. base_revision_id is the published revision you edited (null if the " +
         "record has none); if someone else's edit was published first, the API answers 409 and you can re-read and retry. " +
-        "Needs a token.",
+        "Needs a token. Prefer running the stated check when one exists.",
       inputSchema: z.object({
         record_id: RECORD_ID,
         base_revision_id: REVISION_ID.nullable(),

@@ -5,11 +5,11 @@ import { after, before, beforeEach, describe, test } from "node:test";
 import type { Canary } from "../src/librarian/canaries.ts";
 import { NoosphereClient } from "../src/librarian/client.ts";
 import { scriptedReviewer } from "../src/librarian/fake.ts";
-import { buildUserMessage } from "../src/librarian/prompt.ts";
+import { buildUserMessage, RUBRIC_VERSION } from "../src/librarian/prompt.ts";
 import type { ReviewInput } from "../src/librarian/reviewer.ts";
 import { runCycle, type CycleOptions } from "../src/librarian/run.ts";
 import { SpendLedger } from "../src/librarian/spend.ts";
-import { count, createRecordAs, propose, publish, publishedRecord, sampleRecord, setup } from "./helpers.ts";
+import { bearer, count, createRecordAs, propose, publish, publishedRecord, sampleRecord, sampleOutcome, setup } from "./helpers.ts";
 
 const RUBRIC = "rubric-test";
 const canary = (name: string, expect: Canary["expect"], title: string): Canary => ({
@@ -192,4 +192,69 @@ describe("the prompt's data framing", () => {
     assert.equal(msg.split("</submission>").length - 1, 1, "only the real closing tag");
     assert.match(msg, /\\u003c\/submission>/);
   });
+});
+
+test("rubric-3 sends frozen checks and exact-run assertions to fake reviewers and applies holds", async () => {
+  const t = setup();
+  try {
+    const base = await t.app.listen({ host: "127.0.0.1", port: 0 });
+    const bad = await createRecordAs(t.app, t.a.token, sampleRecord({
+      title: "Fix startup when a settings file is missing",
+      summary: "Startup succeeds with no settings file.",
+      verify: { run: "tsc --noEmit", expect: "the compiler emits no diagnostics" },
+    }));
+    const good = await publishedRecord(t, t.a.token, { title: "Check startup without settings", verify: { run: "node start.ts --without-settings", expect: "prints ready and default settings" } });
+    const report = await t.app.inject({ method: "POST", url: `/api/v1/revisions/${good.revisionId}/annotations`, headers: bearer(t.b.token), payload: sampleOutcome({ check: { ran: "tsc --noEmit", observed: "the compiler emits no diagnostics", stated: true } }) });
+    assert.equal(report.statusCode, 201);
+    const reportId = report.json().annotation.id;
+    const payloadOf = (user: string) => JSON.parse(user.slice(user.indexOf("\n") + 1, user.lastIndexOf("\n</submission>")));
+    // This checks the prompt contract and transport of the evidence, not a paid model's judgment.
+    const decide = (input: ReviewInput) => {
+      assert.match(input.system, /Hold a revision whose verify cannot observe the result/);
+      assert.match(input.system, /Hold a report with stated: true whose ran text clearly differs/);
+      const payload = payloadOf(input.user);
+      if (payload.id === bad.revisionId) {
+        assert.equal(payload.verify.run, "tsc --noEmit");
+        assert.equal(payload.verify.expect, "the compiler emits no diagnostics");
+        return "hold" as const;
+      }
+      if (payload.id === reportId) {
+        assert.equal(payload.check.stated, true);
+        assert.equal(payload.target_revision.verify.run, "node start.ts --without-settings");
+        assert.notEqual(payload.check.ran, payload.target_revision.verify.run);
+        return "hold" as const;
+      }
+      assert.fail("unexpected review item");
+    };
+    const primary = scriptedReviewer("fake/checks-a", decide);
+    const second = scriptedReviewer("fake/checks-b", decide);
+    const result = await runCycle({ client: new NoosphereClient(base, t.s.token), primary, second,
+      rubricVersion: RUBRIC_VERSION, ledger: new SpendLedger(join(t.dir, "verify-spend.jsonl")),
+      monthlyCapUsd: 5, runCapUsd: 5, pauseFile: join(t.dir, "paused"), notify: () => {}, canaries: [],
+    });
+    assert.equal(result.reviewed, 2);
+    assert.deepEqual(result.applied, { hold_revision: 1, hold_annotation: 1 });
+    assert.equal(result.spendRunUsd, 0);
+    assert.equal(primary.calls.length, 2);
+    assert.equal(second.calls.length, 2);
+    // Assert outside the fake too: reviewer exceptions become safe holds, so
+    // assertions inside a fake alone would let missing context pass unnoticed.
+    for (const call of [...primary.calls, ...second.calls]) {
+      assert.match(call.system, /Hold a revision whose verify cannot observe the result/);
+      assert.match(call.system, /Hold a report with stated: true whose ran text clearly differs/);
+      const payload = payloadOf(call.user);
+      if (payload.id === bad.revisionId) assert.equal(payload.verify.run, "tsc --noEmit");
+      else {
+        assert.equal(payload.id, reportId);
+        assert.equal(payload.check.stated, true);
+        assert.equal(payload.target_revision.verify.run, "node start.ts --without-settings");
+      }
+    }
+    for (const id of [bad.revisionId, reportId]) {
+      const event = t.db.prepare("SELECT action, rubric_version, reason FROM moderation_events WHERE target_id = ?").get(id) as any;
+      assert.equal(event.rubric_version, "rubric-3");
+      assert.match(event.action, /^hold_/);
+      assert.match(event.reason, /fake\/checks-a: hold.*fake\/checks-b: hold/);
+    }
+  } finally { await t.close(); }
 });

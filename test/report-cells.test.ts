@@ -65,7 +65,7 @@ describe("outcome reports grouped by conditions", () => {
     assert.deepEqual(w.outcomes, { worked: 1 });
     // The existing tally is unchanged beside it.
     assert.deepEqual(h.this_revision.outcomes, { worked: 3, failed: 1 });
-    assert.deepEqual(Object.keys(h.this_revision), ["outcomes", "outcomes_with_check", "latest", "by_conditions"]);
+    assert.deepEqual(Object.keys(h.this_revision), ["outcomes", "outcomes_with_check", "outcomes_with_stated_check", "latest", "by_conditions"]);
   });
 
   test("the page shows one line per cell, the disputed one first and marked", async () => {

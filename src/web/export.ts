@@ -42,6 +42,7 @@ export function revisionMarkdown(db: DB, revisionId: string, publicOrigin: strin
       content_license: rev.content_license,
       tags: rev.tags,
       conditions: rev.conditions,
+      verify: rev.verify,
       sources: rev.sources,
       links: rev.links,
       html_url: `${publicOrigin}/r/${rev.record_slug}/revisions/${rev.id}`,

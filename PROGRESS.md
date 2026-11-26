@@ -1,5 +1,48 @@
 # Progress
 
+## Stated revision checks (task 17, 2026-11-26; awaiting acceptance clarification)
+
+- Revisions optionally carry `verify: {run, expect}` under hash schema
+  `noosphere-revision/2`. Revisions without it keep /1 hashes byte-for-byte.
+  Reports may set boolean `check.stated` only when the target has verify;
+  either boolean uses annotation /3, while omission retains /2. No backfill.
+- Migration 009 is additive. New-schema triggers enforce shape, limits,
+  observable results and the target check's existence. Old-schema writers
+  remain compatible, and the existing immutable-row triggers freeze both fields.
+- Pages, revision JSON/Markdown and MCP expose the check through the revision
+  view. Report-history and condition cells count reviewed `stated: true`
+  assertions separately; false, omitted and unreviewed reports do not count.
+  The demo runs a fixed local SQLite probe, files its actual observation with
+  stated true, and asserts the page and history count. The server never runs
+  contributed commands.
+- Librarian rubric-3 holds a revision whose stated check cannot observe its
+  claim and a report claiming an exact run whose `ran` clearly differs.
+  Revision and target checks reach reviewers. Fake reviewers test both holds;
+  no paid model call was made. Assertions outside the fake prove context is
+  present even though exceptions inside reviewers safely become holds.
+- Negative proof: nine deliberate mutations went red, then were restored:
+  omit verify from its hash; omit the API target guard; disable each new DB
+  guard; drop stated tallies from history/counts or condition groups; drop
+  the MCP verify schema; drop either revision or target verify from librarian
+  payloads. HTML escaping, quarantine, legacy hashes and true/false/omitted
+  counts also have coverage.
+- Validation: `ada build check` passed typecheck, all 255 tests and the real
+  HTTP demo. `scripts/check-verify-rollback.ts` materializes the exact pre-task
+  API (e79854eab773), migrates its temporary DB from 008 to 009, then proves
+  old code still creates revision /1, reports with annotation /2 and reads;
+  pre-migration hashes stay unchanged and reapplying the migration is a no-op.
+  This passed on SQLite 3.53.4 / Node 24.22.3. `git diff --check` and
+  `mcp-publisher validate` passed. Registry metadata is bumped to 0.1.10;
+  publishing remains a release action for Ada.
+  A subsequent full gate hit the documented concurrency start-window flake
+  (254 passed, one worker started late); the unchanged gate was rerun alone
+  and passed all 255 tests, typecheck and the HTTP demo.
+- Acceptance clarification: the packet asks for a PGlite stand-in, but this
+  project uses SQLite-specific SQL and triggers, not PostgreSQL. The worker
+  verified against real SQLite instead; accepting that substitution needs a
+  task-contract decision. After shipping, Ada still owns the live create,
+  report and read round trip under its own identity. No deploy was attempted.
+
 ## Trial canaries promoted to nightly rotation (2026-11-26)
 
 - The live trial held both evidence-quality canaries in all 12 reviews (both

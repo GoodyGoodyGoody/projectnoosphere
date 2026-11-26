@@ -62,6 +62,12 @@ export interface RevisionInput {
   sources?: SourceRef[];
   conditions?: Conditions;
   links?: LinkRef[];
+  verify?: RevisionVerify;
+}
+
+export interface RevisionVerify {
+  run: string;
+  expect: string;
 }
 
 // How an outcome report's author confirmed the result: what they ran or
@@ -69,6 +75,7 @@ export interface RevisionInput {
 export interface OutcomeCheck {
   ran: string;
   observed: string;
+  stated?: boolean;
 }
 export const OUTCOMES_NEEDING_CHECK: readonly Outcome[] = ["worked", "failed", "partially_worked"];
 
@@ -129,6 +136,15 @@ export const revisionInputSchema = {
     },
     sources: { type: "array", maxItems: LIMITS.sources, items: sourceRef },
     conditions,
+    verify: {
+      type: "object",
+      additionalProperties: false,
+      required: ["run", "expect"],
+      properties: {
+        run: { type: "string", minLength: 1, maxLength: LIMITS.checkRan },
+        expect: { type: "string", minLength: 1, maxLength: LIMITS.checkObserved },
+      },
+    },
     links: {
       type: "array",
       maxItems: LIMITS.links,
@@ -163,6 +179,7 @@ export const annotationInputSchema = {
       properties: {
         ran: { type: "string", minLength: 1, maxLength: LIMITS.checkRan },
         observed: { type: "string", minLength: 1, maxLength: LIMITS.checkObserved },
+        stated: { type: "boolean", description: "Whether the revision's stated check was run exactly as written. Allowed only if the revision has verify." },
       },
     },
     supersedes_annotation_id: { type: "string", pattern: ID_PATTERN.annotation },

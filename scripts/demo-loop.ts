@@ -12,6 +12,7 @@
 // the fleet's ports or any real data. Every claim is asserted; any mismatch
 // exits non-zero. Run: npm run demo
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,9 +34,12 @@ function recompute(rev: any): string {
     title: rev.title, summary: rev.summary, body_markdown: rev.body_markdown, tags: rev.tags,
     sources: rev.sources, conditions: rev.conditions, links: rev.links,
     content_license: rev.content_license, created_at: rev.created_at,
+    verify: rev.verify,
   });
 }
 
+// Fixed local demo code, not a command taken from a contributed record.
+const SQLITE_CHECK_SCRIPT = 'const D=require("better-sqlite3"); console.log(new D(":memory:").prepare("select sqlite_version()").get())';
 const FINDING = {
   kind: "procedure",
   title: "better-sqlite3 13 loads from bundled prebuilds without its install script",
@@ -49,6 +53,10 @@ const FINDING = {
   tags: ["better-sqlite3", "npm", "node-24"],
   sources: [{ url: "https://github.com/WiseLibs/better-sqlite3", note: "project home" }],
   conditions: { node: "24.19.0", npm: "11.17.0", os: "Ubuntu 24.04 x64", observed: "2026-09-30" },
+  verify: {
+    run: `node -e '${SQLITE_CHECK_SCRIPT}'`,
+    expect: "prints a sqlite_version() value, proving the bundled native module loads and executes a query",
+  },
 };
 
 try {
@@ -85,6 +93,10 @@ try {
   const got = await call("GET", `/api/v1/revisions/${rev1}`);
   assert.equal(recompute(got.json.revision), got.json.revision.content_hash);
   assert.equal(got.json.revision.review_state, "candidate");
+  const observed = execFileSync(process.execPath, ["-e", SQLITE_CHECK_SCRIPT], {
+    cwd: join(import.meta.dirname, ".."), encoding: "utf8",
+  }).trim();
+  assert.match(observed, /sqlite_version\(\).*\d+\.\d+\.\d+/);
   const report = await call("POST", `/api/v1/revisions/${rev1}/annotations`, B.credential.token, {
     kind: "outcome_report",
     outcome: "worked",
@@ -95,8 +107,9 @@ try {
     evidence: [{ revision_id: rev1, note: "the exact revision tested" }],
     conditions: { node: "24.19.0", npm: "11.17.0", os: "Ubuntu 24.04 x64", tested: "2026-09-30" },
     check: {
-      ran: "node -e \"console.log(new (require('better-sqlite3'))(':memory:').prepare('select sqlite_version() v').get().v)\"",
-      observed: "3.53.4",
+      ran: FINDING.verify.run,
+      observed,
+      stated: true,
     },
   });
   assert.equal(report.status, 201);
@@ -107,6 +120,13 @@ try {
   assert.equal((await moderate("publish_revision", rev1, "sourced, specific, fit to publish")).status, 201);
   assert.equal((await moderate("approve_annotation", annId, "a concrete observation")).status, 201);
   say("steward", "publishes rev1; approves B's report");
+  const page = await fetch(`${base}/r/${created.json.record.slug}/revisions/${rev1}`);
+  // The provisional slug redirects after publication.
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /1 ran the stated check/);
+  const history = await call("GET", `/api/v1/revisions/${rev1}/report-history`);
+  assert.equal(history.json.this_revision.outcomes_with_stated_check.worked, 1);
+  say("C (anon)", "rev1 page shows 1 ran the stated check; report-history agrees");
 
   // 4. B proposes a correction, and retries it (lost response) with the same key.
   const correction = {

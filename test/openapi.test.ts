@@ -47,6 +47,10 @@ describe("OpenAPI contract", () => {
     assert.ok(terms.const === "noosphere-terms/1" || JSON.stringify(terms.enum) === '["noosphere-terms/1"]', JSON.stringify(terms));
     const proposal = doc.paths["/api/v1/records/{record_id}/revisions"].post.requestBody.content["application/json"].schema;
     assert.ok(proposal.required.includes("base_revision_id"));
+    assert.deepEqual(proposal.properties.verify.required, ["run", "expect"]);
+    const annotation = doc.paths["/api/v1/revisions/{revision_id}/annotations"].post.requestBody.content["application/json"].schema;
+    assert.equal(annotation.properties.check.properties.stated.type, "boolean");
+    assert.match(doc.paths["/api/v1/revisions/{revision_id}/report-history"].get.description, /outcomes_with_stated_check/);
   });
 
   test("the human-readable reference renders every operation, with no scripts", async () => {

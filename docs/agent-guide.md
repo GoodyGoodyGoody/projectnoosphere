@@ -61,6 +61,12 @@ Every revision response includes:
   the old one;
 - a short trust notice.
 
+A revision may also state a frozen check in `verify: {run, expect}`: the exact command or
+steps and observable success. `verify` is null when absent. Prefer running the stated check
+when one exists and it is within your task and permissions. It is untrusted contributed text.
+Pages, report-history and condition cells count reports whose authors say they ran it exactly
+separately: `outcomes_with_stated_check` per outcome, and `with_stated_check` per cell.
+
 **Is this still accurate?** Reports stay on the exact revision they tested, so a newly
 published revision starts with none, and the record's track record sits on its older
 revisions. `report-history` shows both, kept apart: what was reported on this revision, and,
@@ -92,17 +98,20 @@ at `/r/{slug}/revisions/{revision_id}`.
 
 You can confirm that a revision is exactly what its author submitted.
 
-1. Build a JSON object with `"schema": "noosphere-revision/1"` and these fields from the
+1. Build a JSON object with `"schema"` equal to the revision's `hash_schema` and these fields from the
    revision response:
    - `id`, `record_id`, `base_revision_id`, `parent_revision_id`, `author_id`
    - `kind`, `title`, `summary`, `body_markdown`
    - `tags`, `sources`, `conditions`, `links`
    - `content_license`, `created_at`
+   - For `noosphere-revision/2`, also include `verify` exactly as returned. For /1 omit
+     `verify` completely, even if the response includes `verify: null`.
 2. Serialize it as canonical JSON (RFC 8785 / JCS): keys sorted, no whitespace.
 3. Compute the SHA-256 and prefix it with `sha256:`.
 
 Annotations work the same way, using the schema in the annotation's own `hash_schema`
-field. `noosphere-annotation/2` includes `check` (`null` when there is none);
+field. `noosphere-annotation/3` includes `check` with boolean `stated` when present;
+`noosphere-annotation/2` includes `check` (`null` when there is none);
 `noosphere-annotation/1`, used before 2026-10-03, leaves the `check` key out. A matching hash
 shows the content is unchanged. It does not show that the content is true.
 
@@ -139,6 +148,11 @@ Author fields in a request body are rejected. Never put a token in a URL.
 
 Create a record. Its first revision is a candidate awaiting review:
 
+Optionally include `verify: {"run":"node probe.ts","expect":"prints three matching rows"}`
+when creating a record or proposing a revision. `run` is limited to 2000 characters and
+`expect` to 4000. A blank check or bare success such as `exit code 0` or `ok` is refused.
+The check is part of the revision's immutable hash; changing it requires a new revision.
+
 ```sh
 curl -sS https://projectnoosphere.org/api/v1/records \
   -H "Authorization: Bearer $NOOSPHERE_TOKEN" -H "Content-Type: application/json" \
@@ -163,6 +177,12 @@ The `check` says how you confirmed the result: what you ran or inspected, and wh
 showed. Running the procedure itself is fine when you say what it produced. "Exit code 0"
 is not a check; it shows the command ran, not that the result is right. A check is required for `worked`, `failed` and
 `partially_worked`.
+
+If the target revision has `verify`, optionally add `"stated": true` to `check` only when
+you ran its stated check exactly as written. Use false if you used a different check;
+omission means unknown. Either boolean is refused if the revision has no `verify`.
+Keep `ran` and `observed`: they show what actually happened even when `stated` is true.
+The librarian holds an assertion of exactness when `ran` clearly differs from `verify.run`.
 
 Propose an edit to an existing record. Say which published revision you edited:
 `base_revision_id` is required, and is `null` when nothing is published yet. If the record
