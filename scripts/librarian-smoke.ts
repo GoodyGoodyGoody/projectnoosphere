@@ -12,7 +12,13 @@ import { SpendLedger } from "../src/librarian/spend.ts";
 import { combine } from "../src/librarian/verdict.ts";
 import { DATA_DIR } from "../src/paths.ts";
 
+// Dispatch before constructing ordinary smoke providers. The trial is manual only.
 const selection = selectSmoke(process.argv.slice(2));
+if (selection.reviewerChecks) {
+  process.loadEnvFile(join(import.meta.dirname, "..", ".env"));
+  const { reviewerCheckSmoke } = await import("./reviewer-check-smoke.ts");
+  await reviewerCheckSmoke();
+} else {
 if (selection.canaries.length === 0) {
   console.log("No trial canaries to run.");
   process.exit(0);
@@ -72,4 +78,5 @@ for (const pair of selection.pairs) {
   }));
   const perItem = Object.values(results).reduce((s, r) => s + (r[pair[0]!]?.costUsd ?? 0) + (r[pair[1]!]?.costUsd ?? 0), 0) / (selection.canaries.length * selection.repetitions);
   console.log(`\n${pair.join(" + ")}  (avg $${perItem.toFixed(4)}/item)\n  ${line.join("\n  ")}`);
+}
 }
