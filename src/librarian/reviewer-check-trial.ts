@@ -35,17 +35,21 @@ NEVER from the author's test, check or verify (even when embedded in the body). 
 For a check, no_check is null; run is 1–2000 characters and expect is 1–4000 characters describing specific observations,
 never bare "ok" or "exit code 0". The short command must need no network and be harmless: no destructive operations,
 credentials, service restarts or writes outside an explicitly fresh temporary sandbox. State required runtime/setup.
-It must not reuse or depend on the files the fix edits, including changed tests. Do not copy a proposed implementation
-into a toy replacement and test that instead of the actual promised behaviour. Prefer an independent public interface.
+The check calls the fixed code's real public interface (a function, module, CLI or file the item names), as its users would.
+It must not reuse, import or depend on the author's tests, checks or verify. Do not copy a proposed implementation
+into a toy replacement and test that instead of the actual promised behaviour.
 If no such short command can test the promise, use run:null, expect:null, no_check: a concise reason.
 For spam, manipulation, or an annotation without a testable technical promise, no_check is appropriate; do not invent a fix.`;
 export const JUDGE_PROMPT = `${DATA_RULE}
 Judge the other reviewer's draft against the item. Return {verdict:"accepts"|"rejects", reason: one plain sentence}.
 Accept only if its promise follows from title, summary, body and sources rather than the author's test/check/verify,
-and its short harmless offline command observes that exact promise independently of the author's test and all edited files.
+and its short harmless offline command observes that exact promise independently of the author's tests, checks or verify.
+The check may call the real interface of the edited code.
 A passing author test, a copied implementation in a toy harness, silenced warnings, or successful exit alone is insufficient.
 Reject unsafe, network-dependent, non-runnable or circular checks. For no_check, accept only if there is no suitable short
-independent command; judge that abstention, not an invented command. Never execute the proposed command.`;
+independent command; judge that abstention, not an invented command.
+Reject a no_check when the item names a callable function, module or CLI whose promised behaviour
+a short offline command could observe directly, with a one-line reason. Never execute the proposed command.`;
 
 export const DRAFT_SCHEMA = {
   type: "object", additionalProperties: false, required: ["promise", "run", "expect", "no_check"],

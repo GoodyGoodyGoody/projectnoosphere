@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { CANARIES } from "../src/librarian/canaries.ts";
-import { CATCH_NOTES, DRAFT_PROMPT, TRIAL_REVIEWERS, openTrialDb, parseDraft, parseJudgement,
+import { CATCH_NOTES, DRAFT_PROMPT, JUDGE_PROMPT, TRIAL_REVIEWERS, openTrialDb, parseDraft, parseJudgement,
   runReviewerCheckTrial, saveTrialReport, selectTrialItems, trialInput, trialTable,
   type TrialInput, type TrialReviewer, type TrialItem } from "../src/librarian/reviewer-check-trial.ts";
 import { selectSmoke } from "../src/librarian/smoke-selection.ts";
@@ -25,7 +25,18 @@ test("draft parser enforces observable results, limits, exact shape and no_check
   assert.equal(parseJudgement({ verdict: "publish", reason: "yes" }), null);
   assert.deepEqual(parseJudgement(judgement), judgement);
   assert.match(DRAFT_PROMPT, /NEVER from the author's test/);
-  assert.match(DRAFT_PROMPT, /must not reuse or depend on the files the fix edits/);
+});
+
+test("trial prompts allow real interfaces while requiring independent checks and justified abstentions", () => {
+  assert.doesNotMatch(DRAFT_PROMPT, /must not reuse or depend on the files the fix edits/);
+  assert.match(DRAFT_PROMPT, /calls the fixed code's real public interface \(a function, module, CLI or file the item names\), as its users would/);
+  assert.match(DRAFT_PROMPT, /must not reuse, import or depend on the author's tests, checks or verify/);
+  assert.match(DRAFT_PROMPT, /Do not copy a proposed implementation\s+into a toy replacement/);
+  assert.doesNotMatch(JUDGE_PROMPT, /independently of the author's test and all edited files/);
+  assert.match(JUDGE_PROMPT, /may call the real interface of the edited code/);
+  assert.match(JUDGE_PROMPT, /independently of the author's tests, checks or verify/);
+  assert.match(JUDGE_PROMPT, /copied implementation in a toy harness/);
+  assert.match(JUDGE_PROMPT, /Reject a no_check when the item names a callable function, module or CLI whose promised behaviour\s+a short offline command could observe directly/);
 });
 
 test("--reviewer-checks selects 8 bad canaries and 10 deterministic current published revisions read-only", async () => {
