@@ -59,6 +59,8 @@
 - Updated current paper counts and the list of bad kinds. Earlier counts and
   trial entries below describe their historical state. No paid model call was
   made by this worker; prompt, combination rule, alarm and storage are unchanged.
+- Verification: `ada build check` passed the complete `npm run check` chain:
+  typecheck, 257/257 tests (53 suites), and the real-HTTP demo.
 - After shipping, Ada home must check the next 03:20 UTC run for no canary
   alarm and confirm a new kind was held on a night when it is selected.
 
