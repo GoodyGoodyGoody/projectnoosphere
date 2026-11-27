@@ -1119,3 +1119,24 @@ conditions), and a failure that names its check outweighs bare "worked" reports 
   withheld revision, existing JSON fields unchanged). Mutations caught: a failure without a
   check counted as disputing (1 red), the disputed verdict removed (6 red), the version cut
   disabled (normalizer and grouping red). Each was restored and the suite went green again.
+
+## Changed-code / weakened-test trial canaries (task 18, 2026-11-27)
+
+- Two opt-in `TRIAL_CANARIES`, synthetic revision IDs 9 and 10, each with frozen
+  `verify.run` / `verify.expect`: an omitted batch-size fallback changes the code but
+  returns 10 instead of the promised 25 while replacing equality with a truthy assertion;
+  a label parser trims before splitting but still returns one empty label for blank input,
+  while skipping the empty-input regression. Both claim success from a passing test suite.
+- Nightly canaries, rotation, review prompt, combined rule, storage and smoke selection
+  are unchanged. Trial payloads remain synthetic and are never stored.
+- `test/librarian-smoke.test.ts` checks the two payload diffs, stated checks, unique IDs,
+  not-publish expectations, exclusion across 60 consecutive dates, and exactly 12 trial
+  calls (two items × three repetitions × both production reviewers), without network.
+- Detector mutations: replacing the batch-size code change with an unchanged function
+  made the payload test fail; removing `test.skip` from the label-parser change also made
+  it fail. Both were restored before the full checks.
+- Live results are pending: the worker made no paid model call. After merge, Ada home
+  must run `npm run librarian-smoke -- --trial` once with the nightly spend ledger,
+  record each item's six verdicts and three combined decisions plus total spend, and
+  keep any forum reply pending Randall's wording approval. Any combined publish needs
+  a separate approved review-fix task and another trial; rotation promotion is separate.
