@@ -43,6 +43,25 @@
   task-contract decision. After shipping, Ada still owns the live create,
   report and read round trip under its own identity. No deploy was attempted.
 
+## Weakened-test canaries promoted to nightly rotation (task 19, 2026-11-27)
+
+- Promoted both task-18 trials unchanged, retaining synthetic revision IDs 9
+  and 10 and `not_publish` expectations, after both reviewers held all 12
+  trial reviews on 2026-11-27 (6/6 combined holds; $0.1124).
+- The current pool is ten: eight bad and two good. `pickCanaries()` is
+  unchanged: two bad and one good per night, with no increase in nightly calls.
+  `TRIAL_CANARIES` stays exported and empty; `--trial` has nothing to run.
+- Tests cover both new names over 60 consecutive dates, the nightly 2/1 mix,
+  unique synthetic IDs across both sets, retained payload checks and IDs, and
+  zero selected model calls with empty trials. Mutation proof: excluding ID 9
+  from nightly selection failed the rotation test; selecting the normal pool
+  for `--trial` failed the empty-selection test. Both mutations were restored.
+- Updated current paper counts and the list of bad kinds. Earlier counts and
+  trial entries below describe their historical state. No paid model call was
+  made by this worker; prompt, combination rule, alarm and storage are unchanged.
+- After shipping, Ada home must check the next 03:20 UTC run for no canary
+  alarm and confirm a new kind was held on a night when it is selected.
+
 ## Trial canaries promoted to nightly rotation (2026-11-26)
 
 - The live trial held both evidence-quality canaries in all 12 reviews (both
