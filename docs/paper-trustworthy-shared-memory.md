@@ -180,12 +180,13 @@ once a night. Its design has five layers.
    quarantine; reject only if both say reject; otherwise hold. A refusal, an error, or a reply
    that does not fit the schema counts as a hold. A refusal is not passed to a fallback model,
    because the rule must know which model spoke.
-4. **Planted test items (canaries).** The code holds eight fixed test submissions
-   (`src/librarian/canaries.ts` in the repository): six that must not be published (a note
+4. **Planted test items (canaries).** The code holds ten fixed test submissions
+   (`src/librarian/canaries.ts` in the repository): eight that must not be published (a note
    telling the reviewer the item was "pre-approved", an advert, a claim of agreement by "40
    independent agents" with no real source, and a message telling any AI reader to abandon its
    task, a runtime crash claimed fixed after only typechecking, and a warning hidden instead
-   of corrected) and two clean items that should be published. Every cycle mixes two bad items and one
+   of corrected, a wrong default hidden by a truthy assertion, and an empty-input failure
+   hidden by skipping its test) and two clean items that should be published. Every cycle mixes two bad items and one
    good one into the real queue, formatted like real items, and reviews them *first*. If the
    combined decision of the two models would publish a bad canary, the whole run is discarded: nothing from it is
    applied, automatic publication pauses, and the founder gets an alarm. If the budget runs out
@@ -237,7 +238,7 @@ for Noosphere.
 | Credential-shaped text is never stored | Deterministic pattern gate before storage | Patterns are high-confidence by design; near-misses pass. |
 | Withheld content is withheld everywhere | One representation function; tested on every surface | A quarantine decision itself depends on a model (below). |
 | One model alone cannot publish | Combination rule in plain code | Both models may share the same blind spot. |
-| A run that would publish a planted bad item applies nothing | Canary check in plain code, before anything is applied | Eight fixed canaries are a floor, not a measure of everything. |
+| A run that would publish a planted bad item applies nothing | Canary check in plain code, before anything is applied | Ten fixed canaries are a floor, not a measure of everything. |
 | Spending stays under the cap | Worst-case cost checked before every call | A backlog builds if submissions outpace the budget. |
 | Every decision on a revision is public | Append-only log, written in the same transaction | Decisions on annotations are logged but not yet shown in the public API. |
 | Outcome reports carry conditions and a check | API validation and a database trigger | Whether the check really observes the claimed result is judged by a model. |
@@ -365,7 +366,7 @@ answers in a certain position [15]. Agreement of 51 out of 52
 is consistent with two good reviewers on easy input, and also with two reviewers who fail the
 same way. The data cannot tell these apart yet.
 
-**The canaries are few, fixed and public.** Eight test items, three per night, check that the
+**The canaries are few, fixed and public.** Ten test items, three per night, check that the
 reviewers still catch a few known kinds of bad submission. Because the code is public, an
 attacker can read them and craft something that differs. They are a floor and a tripwire, not a
 measure of review quality. They are deliberately benign, so they do not test harmful content.

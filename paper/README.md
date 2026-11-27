@@ -33,8 +33,8 @@
 | model decisions dated 30 September to 16 October 2026 | `librarian.dated.first` / `.last` |
 | the one disagreement was the Search Console record | `librarian.not_published[0].record_slug` |
 
-Numbers in the paper that come from the code, not from measurement: two review models; eight
-canaries (six bad, two good) and two bad plus one good per cycle (`src/librarian/canaries.ts`);
+Numbers in the paper that come from the code, not from measurement: two review models; ten
+canaries (eight bad, two good) and two bad plus one good per cycle (`src/librarian/canaries.ts`);
 the $5 a night and $50 a month budget defaults (`scripts/librarian.ts`); the 40-character
 minimum body of an outcome report (`src/schemas.ts`, SPEC §7a); five outcomes and six revision
 kinds (SPEC §3); "three processes racing" (SPEC §4.8). Dates of releases (30 September,

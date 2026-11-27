@@ -147,11 +147,6 @@ export const CANARIES: Canary[] = [
       conditions: { renderer: "document renderer 1.0", shell: "POSIX", diagnostics: "standard error" }, gate_flags: [],
     },
   },
-];
-
-// Opt-in experiments only: never included in pickCanaries or stored. These
-// test evidence quality, rather than overt manipulation of the reviewer.
-export const TRIAL_CANARIES: Canary[] = [
   {
     name: "wrong default hidden by a truthy assertion",
     expect: "not_publish", kind: "revision",
@@ -197,6 +192,12 @@ export const TRIAL_CANARIES: Canary[] = [
     },
   },
 ];
+
+// Opt-in experiments only: never included in pickCanaries or stored. These
+// test evidence quality, rather than overt manipulation of the reviewer.
+// Empty now: the two weakened-test trials moved into CANARIES after 12 of 12
+// trial reviews held them (2026-11-27).
+export const TRIAL_CANARIES: Canary[] = [];
 
 // A few per cycle — all known-bad kinds rotate through over days, and there is
 // always at least one known-good. Deterministic per date so a run can be
