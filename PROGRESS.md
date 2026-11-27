@@ -1161,3 +1161,24 @@ conditions), and a failure that names its check outweighs bare "worked" reports 
   record each item's six verdicts and three combined decisions plus total spend, and
   keep any forum reply pending Randall's wording approval. Any combined publish needs
   a separate approved review-fix task and another trial; rotation promotion is separate.
+
+## Reviewer-written checks, phase 0 (task 21, not released)
+
+- Added manual `librarian-smoke -- --reviewer-checks`, isolated draft/judgement prompts,
+  strict parsers, both production models/settings, read-only deterministic selection of
+  8 known-bad canaries and 10 current published revisions, a trial-only answer key,
+  spend reservations below $1 and atomic JSON reports in the data folder's trial area.
+  Nightly prompt, rubric, canaries, rotation, combination rule and database writes are unchanged.
+- Mocked tests exercise all 72 calls, cross-judgement, answer-key exclusion, parser limits,
+  abstention, read-only SQLite write rejection, partial output, accounting and budget stops.
+  Provider HTTP is mocked too, checking the actual model, effort, token limit and schema.
+- Mutation: temporarily opened the trial database writable. The read-only acceptance test
+  failed with "Missing expected exception" on its attempted CREATE TABLE. Restored readonly.
+- Build validation is blocked: `ada build build` refused at memory preflight (3062 MB
+  effective, minimum 3200 MB). No bypass or retry. Full acceptance cannot yet be claimed.
+- Verification completed: `npm test` passed all 263 tests; `npm run demo` passed its
+  real-HTTP workflow. Both focused trial files passed all six tests after restoring the
+  read-only mutation. The typecheck remains unrun because preflight refused it.
+- No paid model call was made. Run and scoring instructions: `docs/reviewer-check-trial.md`.
+  Ada home must wait for task 20's release before releasing this task, then run and score
+  the paid trial once; forum results wording still needs Randall's OK.
