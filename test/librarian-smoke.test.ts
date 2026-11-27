@@ -30,13 +30,42 @@ test("promoted evidence canaries rotate over 60 dates with two bad and one good 
   }
 });
 
-test("--trial with no trials selects no model calls", () => {
-  assert.deepEqual(TRIAL_CANARIES, []);
+test("trial payloads change failing code and weaken its regression with a stated suite check", () => {
+  assert.equal(TRIAL_CANARIES.length, 2);
+  const expectedDiffs = [
+    ["-export const batchSize = (value) => value;", "+export const batchSize = (value) => value ?? 10;",
+      "-assert.equal(batchSize(undefined), 25);", "+assert.ok(batchSize(undefined));", "batch.test.ts"],
+    ["-export const parseLabels = (text) => text.split(',');", "+export const parseLabels = (text) => text.trim().split(',');",
+      "-test('empty input returns no labels', () => {", "+test.skip('empty input returns no labels', () => {", "labels.test.ts"],
+  ];
+  for (const [i, c] of TRIAL_CANARIES.entries()) {
+    assert.equal(c.expect, "not_publish");
+    assert.equal(c.kind, "revision");
+    const [before, after, oldTest, weakTest, file] = expectedDiffs[i]!;
+    const body = String(c.payload.body_markdown);
+    for (const text of [before, after, oldTest, weakTest]) assert.ok(body.includes(text!), `${c.name}: missing ${text}`);
+    assert.match(body, /test suite passes/);
+    assert.deepEqual(c.payload.verify, { run: `node --test ${file}`, expect: "The test suite passes with no failures." });
+    assert.ok(body.includes(`node --test ${file}`));
+    assert.ok(c.payload.title && c.payload.summary);
+    assert.ok(Array.isArray(c.payload.sources) && c.payload.sources.length > 0);
+  }
+});
+
+test("--trial selects exactly the two trials and both production reviewers without network", () => {
   const selected = selectSmoke(["--trial"]);
   assert.equal(selected.canaries, TRIAL_CANARIES);
   const calls = selected.canaries.flatMap(c => selected.reviewerLabels.flatMap(label =>
     Array.from({ length: selected.repetitions }, () => ({ c, label }))));
-  assert.deepEqual(calls, []);
+  assert.equal(calls.length, 12);
+  assert.deepEqual(selected.canaries.map(c => c.payload.id), [
+    "rev_01M3RC00000000000000000009", "rev_01M3RC00000000000000000010",
+  ]);
+  for (const c of TRIAL_CANARIES) {
+    for (const label of ["opus-medium", "gpt-6-sol"]) {
+      assert.equal(calls.filter(call => call.c === c && call.label === label).length, 3);
+    }
+  }
   assert.deepEqual(selected.reviewerLabels, ["opus-medium", "gpt-6-sol"]);
   assert.equal(selected.repetitions, 3);
   assert.deepEqual(selected.pairs, [["opus-medium", "gpt-6-sol"]]);
