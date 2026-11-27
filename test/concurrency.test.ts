@@ -1,28 +1,80 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
-import { promisify } from "node:util";
 import { bearer, count, createRecordAs, propose, publish, sampleRecord, setup } from "./helpers.ts";
 
-const run = promisify(execFile);
 const WORKER = join(import.meta.dirname, "fixtures", "inject-worker.ts");
+// Loading the app takes ~0.75 s alone but far longer on a busy machine (a fixed
+// 5 s from launch failed at load ~5–8, 2026-11-25/27), so the start time is set
+// only once every worker reports ready. The limit is generous and fails clearly.
+const READY_LIMIT_MS = 60_000;
+const RESULT_LIMIT_MS = 30_000;
+const START_DELAY_MS = 300;
+
+type WorkerResult = { status: number; body: any; replayed: string | null; elapsedMs: number; late: boolean };
+type Worker = { child: ChildProcess; ready: Promise<void>; done: Promise<string> };
+
+function launch(dbPath: string, request: object, env: NodeJS.ProcessEnv, i: number): Worker {
+  const child = spawn(process.execPath, [WORKER, dbPath, JSON.stringify(request)], { env, stdio: ["pipe", "pipe", "pipe"] });
+  // A worker that died after reporting ready fails through `done`; don't let
+  // the write of its start time crash the test runner with EPIPE instead.
+  child.stdin!.on("error", () => {});
+  let out = "";
+  let err = "";
+  let markReady!: () => void;
+  let failReady!: (e: Error) => void;
+  const ready = new Promise<void>((res, rej) => { markReady = res; failReady = rej; });
+  const done = new Promise<string>((res, rej) => {
+    child.stdout!.on("data", (c) => {
+      out += String(c);
+      if (out.startsWith("ready\n")) markReady();
+    });
+    child.stderr!.on("data", (c) => { err += String(c); });
+    child.on("error", (e) => { failReady(e); rej(e); });
+    child.on("close", (code, signal) => {
+      const e = new Error(`worker ${i} exited (code ${code}, signal ${signal}) before finishing:\n${err}`);
+      failReady(e); // no-op once ready
+      if (code === 0 && out.startsWith("ready\n")) res(out.slice("ready\n".length));
+      else rej(e);
+    });
+  });
+  ready.catch(() => {});
+  done.catch(() => {});
+  return { child, ready, done };
+}
+
+function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const limit = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error(what)), ms); });
+  return Promise.race([p, limit]).finally(() => clearTimeout(timer));
+}
 
 // Separate OS processes on one SQLite file, released at the same instant —
 // the situation PM2 cluster mode creates. In-process tests cannot show this.
 async function race(dbPath: string, requests: object[], holdMs = 0) {
-  // Each process needs ~0.75 s to load the app alone, far more when the whole
-  // suite runs in parallel; 1.5 s once proved too tight (2026-09-30).
-  const startAt = Date.now() + 5000;
   const env = { ...process.env, HOLD_MS: String(holdMs) };
-  const outs = await Promise.all(
-    requests.map((r) =>
-      run(process.execPath, [WORKER, dbPath, String(startAt), JSON.stringify(r)], { timeout: 20_000, env }),
-    ),
-  );
-  const results = outs.map((o) => JSON.parse(o.stdout) as { status: number; body: any; replayed: string | null; elapsedMs: number; late: boolean });
-  assert.ok(results.every((r) => !r.late), "a worker started after the shared start time; the race did not happen");
-  return results;
+  const workers = requests.map((r, i) => launch(dbPath, r, env, i));
+  try {
+    await within(
+      Promise.all(workers.map((w) => w.ready)),
+      READY_LIMIT_MS,
+      `not every worker loaded the app and reported ready within ${READY_LIMIT_MS} ms`,
+    );
+    // Everyone is loaded and waiting: release them together a short moment ahead.
+    const startAt = Date.now() + START_DELAY_MS;
+    for (const w of workers) w.child.stdin!.end(`${startAt}\n`);
+    const outs = await within(
+      Promise.all(workers.map((w) => w.done)),
+      RESULT_LIMIT_MS,
+      `not every worker finished its request within ${RESULT_LIMIT_MS} ms of the start time`,
+    );
+    const results = outs.map((o) => JSON.parse(o) as WorkerResult);
+    assert.ok(results.every((r) => !r.late), "a worker started after the shared start time; the race did not happen");
+    return results;
+  } finally {
+    for (const w of workers) if (w.child.exitCode === null && w.child.signalCode === null) w.child.kill("SIGKILL");
+  }
 }
 
 // Proof the race happened: with each transaction held HOLD ms, requests that
